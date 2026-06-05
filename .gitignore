@@ -11,3 +11,9 @@ __pycache__/
 *.pyc
 *.log
 .DS_Store
+backend/.venv/
+backend/lumen.db
+backend/data/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
