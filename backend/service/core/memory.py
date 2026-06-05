@@ -1,5 +1,11 @@
+import re
+
 from service.models import Memory, MemoryCandidate
 from service.repositories.memories import MemoryRepository
+
+
+_LATIN_TERM_RE = re.compile(r"[a-z0-9]+")
+_CJK_RUN_RE = re.compile(r"[\u4e00-\u9fff]+")
 
 
 class MemoryService:
@@ -32,11 +38,13 @@ class MemoryService:
         self.memories.ignore(candidate_id)
 
     def search(self, query: str, limit: int = 5) -> list[Memory]:
-        terms = {term.lower() for term in query.split() if term.strip()}
+        terms = self._search_terms(query)
+        if not terms:
+            return []
         scored: list[tuple[int, Memory]] = []
         for memory in self.memories.active_memories():
             score = sum(1 for term in terms if term in memory.text.lower())
-            if score > 0 or not terms:
+            if score > 0:
                 scored.append((score, memory))
         scored.sort(key=lambda item: item[0], reverse=True)
         return [memory for _, memory in scored[:limit]]
@@ -56,3 +64,13 @@ class MemoryService:
         if text.endswith("."):
             return text
         return f"{text}。"
+
+    def _search_terms(self, query: str) -> set[str]:
+        stripped = query.strip().lower()
+        if not stripped:
+            return set()
+        terms = {match.group(0) for match in _LATIN_TERM_RE.finditer(stripped) if len(match.group(0)) >= 2}
+        for match in _CJK_RUN_RE.finditer(stripped):
+            run = match.group(0)
+            terms.update(run[index : index + 2] for index in range(len(run) - 1))
+        return terms

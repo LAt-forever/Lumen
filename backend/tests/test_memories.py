@@ -32,3 +32,29 @@ def test_confirm_candidate_creates_active_memory():
     assert memory.status == "active"
     assert memory.memory_type == "preference"
     assert memory.text == "用户喜欢引用清楚的回答。"
+
+
+def test_search_blank_query_returns_no_memories():
+    service = make_service()
+    candidate = service.extract_candidates("我喜欢引用清楚的回答。", source_kind="message", source_ref="1")[0]
+    service.confirm(candidate.id)
+
+    assert service.search("   ") == []
+
+
+def test_search_finds_mixed_chinese_english_follow_up_without_spaces():
+    service = make_service()
+    candidate = service.extract_candidates("我正在做 Lumen 这个个人 AI 知识库项目。", source_kind="message", source_ref="1")[0]
+    memory = service.confirm(candidate.id)
+
+    results = service.search("Lumen后续怎么做？")
+
+    assert [result.id for result in results] == [memory.id]
+
+
+def test_search_does_not_return_unrelated_memories():
+    service = make_service()
+    candidate = service.extract_candidates("我正在做 Lumen 这个个人 AI 知识库项目。", source_kind="message", source_ref="1")[0]
+    service.confirm(candidate.id)
+
+    assert service.search("晚饭吃什么？") == []
