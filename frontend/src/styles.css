@@ -61,7 +61,7 @@ button {
   width: 20px;
   height: 20px;
   border: 2px solid var(--primary);
-  border-radius: 50%;
+  border-radius: 6px;
   box-shadow: inset 0 0 0 5px #fbfcfa;
   background: var(--focus);
 }
@@ -158,7 +158,7 @@ p {
 .mode-pill,
 .count-pill {
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: 8px;
   background: var(--surface);
   color: #50635a;
   font-size: 12px;
