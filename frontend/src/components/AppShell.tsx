@@ -1,6 +1,9 @@
+import { useState } from 'react'
 import type { LucideIcon } from 'lucide-react'
 
+import type { ChatResponse } from '../api/types'
 import { CapturePanel } from './CapturePanel'
+import { ChatPanel } from './ChatPanel'
 import { ContextPanel } from './ContextPanel'
 import { MemoryInbox } from './MemoryInbox'
 import { ReviewPanel } from './ReviewPanel'
@@ -16,6 +19,8 @@ type AppShellProps = {
 }
 
 export function AppShell({ navItems }: AppShellProps) {
+  const [lastResponse, setLastResponse] = useState<ChatResponse>()
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -49,14 +54,15 @@ export function AppShell({ navItems }: AppShellProps) {
         </header>
 
         <section className="center-column">
-          <CapturePanel />
+          <CapturePanel onResponse={setLastResponse} />
+          {lastResponse ? <ChatPanel response={lastResponse} /> : null}
           <SourceList />
           <ReviewPanel />
         </section>
 
         <aside className="context-column">
           <MemoryInbox />
-          <ContextPanel />
+          <ContextPanel response={lastResponse} />
         </aside>
       </main>
     </div>

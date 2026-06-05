@@ -1,8 +1,13 @@
 import { FormEvent, useState } from 'react'
 
 import { useAskLumen, useCreateSource } from '../api/hooks'
+import type { ChatResponse } from '../api/types'
 
-export function CapturePanel() {
+type CapturePanelProps = {
+  onResponse?: (response: ChatResponse) => void
+}
+
+export function CapturePanel({ onResponse }: CapturePanelProps) {
   const [draft, setDraft] = useState('')
   const askLumen = useAskLumen()
   const createSource = useCreateSource()
@@ -11,7 +16,7 @@ export function CapturePanel() {
     event.preventDefault()
     const message = draft.trim()
     if (message) {
-      askLumen.mutate(message)
+      askLumen.mutate(message, { onSuccess: (response) => onResponse?.(response) })
     }
   }
 

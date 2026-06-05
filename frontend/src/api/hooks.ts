@@ -38,6 +38,29 @@ export function usePendingMemories() {
   })
 }
 
+export function useConfirmMemory() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (candidate: MemoryCandidateRead) =>
+      api.confirmMemory(candidate.id, { text: candidate.text, memory_type: candidate.memory_type }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['memories', 'pending'] })
+      await queryClient.invalidateQueries({ queryKey: ['review'] })
+    },
+  })
+}
+
+export function useIgnoreMemory() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (candidateId: number) => api.ignoreMemory(candidateId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['memories', 'pending'] })
+      await queryClient.invalidateQueries({ queryKey: ['review'] })
+    },
+  })
+}
+
 export function useReview() {
   return useQuery<ReviewRead>({ queryKey: ['review'], queryFn: () => api.review() as Promise<ReviewRead> })
 }

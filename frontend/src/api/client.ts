@@ -1,4 +1,4 @@
-import type { ChatResponse, MemoryCandidateRead, ReviewRead, SourceRead } from './types'
+import type { ChatResponse, MemoryCandidateRead, MemoryRead, ReviewRead, SourceRead } from './types'
 
 const viteEnv = (import.meta as ImportMeta & { env?: { VITE_API_BASE?: string } }).env
 const API_BASE = viteEnv?.VITE_API_BASE ?? 'http://127.0.0.1:8000'
@@ -26,8 +26,8 @@ export const api = {
     }),
   pendingMemories: () => request<MemoryCandidateRead[]>('/api/memories/candidates'),
   confirmMemory: (candidateId: number, payload: { text: string; memory_type: string }) =>
-    request(`/api/memories/candidates/${candidateId}/confirm`, { method: 'POST', body: JSON.stringify(payload) }),
+    request<MemoryRead>(`/api/memories/candidates/${candidateId}/confirm`, { method: 'POST', body: JSON.stringify(payload) }),
   ignoreMemory: (candidateId: number) =>
-    request(`/api/memories/candidates/${candidateId}/ignore`, { method: 'POST' }),
+    request<{ status: string }>(`/api/memories/candidates/${candidateId}/ignore`, { method: 'POST' }),
   review: () => request<ReviewRead>('/api/review'),
 }
