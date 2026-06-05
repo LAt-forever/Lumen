@@ -180,6 +180,13 @@ p {
   padding: 18px;
 }
 
+.center-column {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
 .panel-header {
   display: flex;
   align-items: start;
@@ -235,6 +242,11 @@ p {
   outline: none;
 }
 
+.action-row button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
 .action-row .secondary {
   border: 1px solid #bed0c6;
   background: #edf5f1;
@@ -264,6 +276,33 @@ p {
 .count-pill {
   min-width: 28px;
   text-align: center;
+}
+
+.stack-list {
+  display: grid;
+  gap: 10px;
+}
+
+.list-row {
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
+.list-row strong {
+  color: var(--ink);
+  font-size: 13px;
+  text-transform: capitalize;
+}
+
+.list-row p {
+  margin-bottom: 0;
+}
+
+.plain-list {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--muted);
+  line-height: 1.55;
 }
 
 @media (max-width: 920px) {

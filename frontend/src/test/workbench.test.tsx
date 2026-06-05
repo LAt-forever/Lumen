@@ -11,5 +11,7 @@ describe('Lumen workbench', () => {
     expect(screen.getByText('Ask or capture')).toBeInTheDocument()
     expect(screen.getByText('Memory Inbox')).toBeInTheDocument()
     expect(screen.getByText('Context Now')).toBeInTheDocument()
+    expect(screen.getByText('Recent Sources')).toBeInTheDocument()
+    expect(screen.getByText('Daily Review')).toBeInTheDocument()
   })
 })

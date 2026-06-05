@@ -1,0 +1,26 @@
+import { usePendingMemories } from '../api/hooks'
+
+export function MemoryInbox() {
+  const { data: pendingMemories = [] } = usePendingMemories()
+
+  return (
+    <section className="side-panel">
+      <div className="panel-header">
+        <h2>Memory Inbox</h2>
+        <span className="count-pill">{pendingMemories.length}</span>
+      </div>
+      {pendingMemories.length > 0 ? (
+        <div className="stack-list">
+          {pendingMemories.map((memory) => (
+            <article className="list-row" key={memory.id}>
+              <strong>{memory.memory_type}</strong>
+              <p>{memory.text}</p>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <p>No pending memories yet.</p>
+      )}
+    </section>
+  )
+}

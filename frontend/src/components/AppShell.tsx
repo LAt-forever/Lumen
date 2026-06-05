@@ -1,5 +1,11 @@
 import type { LucideIcon } from 'lucide-react'
 
+import { CapturePanel } from './CapturePanel'
+import { ContextPanel } from './ContextPanel'
+import { MemoryInbox } from './MemoryInbox'
+import { ReviewPanel } from './ReviewPanel'
+import { SourceList } from './SourceList'
+
 type NavItem = {
   label: string
   icon: LucideIcon
@@ -42,42 +48,15 @@ export function AppShell({ navItems }: AppShellProps) {
           </div>
         </header>
 
-        <section className="center-panel" aria-label="Ask or capture">
-          <div className="panel-header">
-            <div>
-              <p className="eyebrow">Primary workspace</p>
-              <h2>Ask or capture</h2>
-            </div>
-            <span className="mode-pill">Ready</span>
-          </div>
-          <label className="field-label" htmlFor="ask-lumen">
-            Ask a question, write a note, or paste a link
-          </label>
-          <textarea
-            id="ask-lumen"
-            aria-label="Ask Lumen"
-            placeholder="What should I remember from this source?"
-          />
-          <div className="action-row">
-            <button type="button">Ask Lumen</button>
-            <button type="button" className="secondary">
-              Add source
-            </button>
-          </div>
+        <section className="center-column">
+          <CapturePanel />
+          <SourceList />
+          <ReviewPanel />
         </section>
 
         <aside className="context-column">
-          <section className="side-panel">
-            <div className="panel-header">
-              <h2>Memory Inbox</h2>
-              <span className="count-pill">0</span>
-            </div>
-            <p>No pending memories yet.</p>
-          </section>
-          <section className="side-panel">
-            <h2>Context Now</h2>
-            <p>Sources and recalled memories will appear here.</p>
-          </section>
+          <MemoryInbox />
+          <ContextPanel />
         </aside>
       </main>
     </div>
