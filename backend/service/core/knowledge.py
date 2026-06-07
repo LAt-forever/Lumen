@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import re
 
 from service.core.chunking import chunk_text
 from service.core.embeddings import HashEmbeddingProvider, cosine, dumps_embedding, loads_embedding
@@ -6,6 +7,15 @@ from service.models import SourceChunk
 from service.repositories.chunks import ChunkRepository
 from service.repositories.sources import SourceRepository
 from service.schemas import ChunkRead
+
+
+_DATE_RE = re.compile(
+    r"(?P<year>\d{4})\s*年\s*(?P<month>\d{1,2})\s*月\s*(?P<day>\d{1,2})\s*日"
+    r"|(?P<iso_year>\d{4})[-/.](?P<iso_month>\d{1,2})[-/.](?P<iso_day>\d{1,2})"
+)
+_LATIN_TERM_RE = re.compile(r"[a-z][a-z0-9_+-]*", re.IGNORECASE)
+_CJK_RUN_RE = re.compile(r"[\u4e00-\u9fff]+")
+_CJK_STOP_TERMS = {"一个", "这个", "那个", "什么", "怎么", "如何", "为何", "哪些", "一下", "是否"}
 
 
 @dataclass
@@ -41,22 +51,77 @@ class KnowledgeService:
 
     def search(self, query: str, limit: int = 5) -> list[ChunkRead]:
         query_vector = self.embeddings.embed(query)
-        query_terms = {term.lower() for term in query.split() if term.strip()}
+        query_terms = self._search_terms(query)
+        query_dates = self._date_terms(query)
         ranked: list[RankedChunk] = []
         for chunk in self.chunks.list_all():
+            searchable_text = f"{chunk.source.title} {chunk.text}"
+            chunk_dates = self._date_terms(searchable_text)
+            if query_dates and query_dates.isdisjoint(chunk_dates):
+                continue
+            chunk_terms = self._search_terms(searchable_text)
+            keyword_score = sum(1.0 for term in query_terms if term in chunk_terms)
+            if keyword_score <= 0:
+                continue
             vector_score = cosine(query_vector, loads_embedding(chunk.embedding_json))
-            keyword_score = sum(1.0 for term in query_terms if term in chunk.text.lower())
-            score = vector_score + keyword_score
-            if score > 0:
-                ranked.append(RankedChunk(chunk=chunk, score=score))
+            date_score = 2.0 if query_dates and not query_dates.isdisjoint(chunk_dates) else 0.0
+            score = (keyword_score * 2.0) + date_score + vector_score
+            ranked.append(RankedChunk(chunk=chunk, score=score))
         ranked.sort(key=lambda item: item.score, reverse=True)
-        return [
-            ChunkRead(
-                id=item.chunk.id,
-                source_id=item.chunk.source_id,
-                source_title=item.chunk.source.title,
-                text=item.chunk.text,
-                score=item.score,
+        results: list[ChunkRead] = []
+        seen_texts: set[str] = set()
+        for item in ranked:
+            focused_text = self._focused_text(item.chunk.text, query_terms, query_dates)
+            fingerprint = re.sub(r"\s+", " ", focused_text).strip().lower()
+            if fingerprint in seen_texts:
+                continue
+            seen_texts.add(fingerprint)
+            results.append(
+                ChunkRead(
+                    id=item.chunk.id,
+                    source_id=item.chunk.source_id,
+                    source_title=item.chunk.source.title,
+                    text=focused_text,
+                    score=item.score,
+                )
             )
-            for item in ranked[:limit]
-        ]
+            if len(results) >= limit:
+                break
+        return results
+
+    def _search_terms(self, text: str) -> set[str]:
+        lowered = text.lower()
+        terms = {match.group(0) for match in _LATIN_TERM_RE.finditer(lowered) if len(match.group(0)) >= 2}
+        for match in _CJK_RUN_RE.finditer(lowered):
+            run = match.group(0)
+            terms.update(run[index : index + 2] for index in range(len(run) - 1))
+        return {term for term in terms if term not in _CJK_STOP_TERMS}
+
+    def _date_terms(self, text: str) -> set[str]:
+        dates: set[str] = set()
+        for match in _DATE_RE.finditer(text):
+            year = match.group("year") or match.group("iso_year")
+            month = match.group("month") or match.group("iso_month")
+            day = match.group("day") or match.group("iso_day")
+            if year and month and day:
+                dates.add(f"{int(year):04d}-{int(month):02d}-{int(day):02d}")
+        return dates
+
+    def _focused_text(self, text: str, query_terms: set[str], query_dates: set[str], window: int = 700) -> str:
+        if not text:
+            return text
+        for match in _DATE_RE.finditer(text):
+            year = match.group("year") or match.group("iso_year")
+            month = match.group("month") or match.group("iso_month")
+            day = match.group("day") or match.group("iso_day")
+            if year and month and day and f"{int(year):04d}-{int(month):02d}-{int(day):02d}" in query_dates:
+                prefix_start = text.rfind("时间 |", max(0, match.start() - 40), match.start())
+                start = prefix_start if prefix_start >= 0 else match.start()
+                return text[start : start + window].strip()
+
+        lowered = text.lower()
+        positions = [lowered.find(term) for term in query_terms if lowered.find(term) >= 0]
+        if not positions:
+            return text[:window].strip()
+        start = max(0, min(positions) - 120)
+        return text[start : start + window].strip()

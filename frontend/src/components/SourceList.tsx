@@ -1,12 +1,13 @@
 import { useSources } from '../api/hooks'
+import { formatSourceStatus } from '../i18n'
 
 export function SourceList() {
   const { data: sources = [] } = useSources()
 
   return (
-    <section className="center-panel" aria-label="Recent Sources">
+    <section className="center-panel" aria-label="最近资料">
       <div className="panel-header">
-        <h2>Recent Sources</h2>
+        <h2>最近资料</h2>
         <span className="count-pill">{sources.length}</span>
       </div>
       {sources.length > 0 ? (
@@ -14,12 +15,12 @@ export function SourceList() {
           {sources.map((source) => (
             <article className="list-row" key={source.id}>
               <strong>{source.title}</strong>
-              <p>{source.status}</p>
+              <p>{formatSourceStatus(source.status)}</p>
             </article>
           ))}
         </div>
       ) : (
-        <p>No sources yet.</p>
+        <p>暂无资料。</p>
       )}
     </section>
   )

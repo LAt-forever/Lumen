@@ -26,7 +26,7 @@ describe('Lumen workbench', () => {
           return jsonResponse([
             {
               id: 1,
-              text: 'Remember that Lumen needs citations.',
+              text: '记住 Lumen 需要展示引用。',
               memory_type: 'project',
               source_kind: 'message',
               source_ref: '1',
@@ -36,7 +36,7 @@ describe('Lumen workbench', () => {
             },
             {
               id: 2,
-              text: 'Ignore this temporary preference.',
+              text: '忽略这个临时偏好。',
               memory_type: 'preference',
               source_kind: 'message',
               source_ref: '2',
@@ -52,15 +52,15 @@ describe('Lumen workbench', () => {
             memories_confirmed: [],
             pending_memories: [],
             recent_questions: [],
-            suggested_actions: ['Add a source to begin.'],
+            suggested_actions: ['添加一条资料开始使用。'],
           })
         }
         if (url.endsWith('/api/chat') && method === 'POST') {
           return jsonResponse({
             conversation_id: 1,
             message_id: 2,
-            answer: 'Grounded answer with citation.',
-            citations: [{ source_id: 1, source_title: 'Acceptance Note', chunk_id: 1, quote: 'Lumen should cite sources.' }],
+            answer: '带引用的可信回答。',
+            citations: [{ source_id: 1, source_title: '验收笔记', chunk_id: 1, quote: 'Lumen 应该引用资料来源。' }],
             memories: [],
             confidence: 'grounded',
           })
@@ -68,7 +68,7 @@ describe('Lumen workbench', () => {
         if (url.endsWith('/api/memories/candidates/1/confirm') && method === 'POST') {
           return jsonResponse({
             id: 1,
-            text: 'Remember that Lumen needs citations.',
+            text: '记住 Lumen 需要展示引用。',
             memory_type: 'project',
             provenance: 'message:1',
             status: 'active',
@@ -92,23 +92,23 @@ describe('Lumen workbench', () => {
     render(<App />)
 
     expect(screen.getByText('Lumen')).toBeInTheDocument()
-    expect(screen.getByText('Ask or capture')).toBeInTheDocument()
-    expect(screen.getByText('Memory Inbox')).toBeInTheDocument()
-    expect(screen.getByText('Context Now')).toBeInTheDocument()
-    expect(screen.getByText('Recent Sources')).toBeInTheDocument()
-    expect(screen.getByText('Daily Review')).toBeInTheDocument()
+    expect(screen.getByText('询问或记录')).toBeInTheDocument()
+    expect(screen.getByText('记忆收件箱')).toBeInTheDocument()
+    expect(screen.getByText('当前上下文')).toBeInTheDocument()
+    expect(screen.getByText('最近资料')).toBeInTheDocument()
+    expect(screen.getByText('今日回顾')).toBeInTheDocument()
 
-    expect(await screen.findByText('Remember that Lumen needs citations.')).toBeInTheDocument()
+    expect(await screen.findByText('记住 Lumen 需要展示引用。')).toBeInTheDocument()
 
-    await user.type(screen.getByLabelText('Ask Lumen'), 'What should Lumen cite?')
-    await user.click(screen.getByRole('button', { name: 'Ask Lumen' }))
+    await user.type(screen.getByLabelText('询问 Lumen'), 'Lumen 应该引用什么？')
+    await user.click(screen.getByRole('button', { name: '询问 Lumen' }))
 
-    expect(await screen.findByText('Grounded answer with citation.')).toBeInTheDocument()
-    expect(await screen.findByText('Acceptance Note')).toBeInTheDocument()
-    expect(screen.getByText('Lumen should cite sources.')).toBeInTheDocument()
+    expect(await screen.findByText('带引用的可信回答。')).toBeInTheDocument()
+    expect(await screen.findByText('验收笔记')).toBeInTheDocument()
+    expect(screen.getByText('Lumen 应该引用资料来源。')).toBeInTheDocument()
 
-    await user.click(screen.getAllByRole('button', { name: 'Confirm' })[0])
-    await user.click(screen.getAllByRole('button', { name: 'Ignore' })[1])
+    await user.click(screen.getAllByRole('button', { name: '确认' })[0])
+    await user.click(screen.getAllByRole('button', { name: '忽略' })[1])
 
     expect(fetch).toHaveBeenCalledWith(
       'http://127.0.0.1:8000/api/memories/candidates/1/confirm',

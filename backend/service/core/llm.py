@@ -5,8 +5,8 @@ class ExtractiveAnswerProvider:
     def answer(self, question: str, chunks: list[ChunkRead], memories: list[str]) -> tuple[str, str]:
         if chunks:
             source_bits = " ".join(chunk.text for chunk in chunks[:2])
-            memory_bits = f" Relevant confirmed memories: {' '.join(memories)}" if memories else ""
-            return f"Based on your sources, {source_bits}{memory_bits}", "grounded"
+            memory_bits = f" 已确认记忆：{' '.join(memories)}" if memories else ""
+            return f"根据你的资料，{source_bits}{memory_bits}", "grounded"
         if memories:
-            return f"I found relevant confirmed memories: {' '.join(memories)}", "memory-only"
-        return "I do not have enough evidence in Lumen yet. Add a source or confirm a relevant memory first.", "weak"
+            return f"我找到了相关的已确认记忆：{' '.join(memories)}", "memory-only"
+        return "Lumen 里还没有足够证据。请先添加相关资料，或确认一条相关记忆。", "weak"

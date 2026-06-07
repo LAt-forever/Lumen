@@ -15,11 +15,11 @@ class ReviewService:
         active = self.memories.active_memories()
         suggestions = []
         if pending:
-            suggestions.append(f"Review {len(pending)} pending memory candidate(s).")
+            suggestions.append(f"处理 {len(pending)} 条待确认记忆。")
         if not active:
-            suggestions.append("Confirm a memory so Lumen can personalize future answers.")
+            suggestions.append("确认一条记忆，让 Lumen 在后续回答中更贴合你。")
         if not suggestions:
-            suggestions.append("Ask Lumen a follow-up question using your confirmed memories.")
+            suggestions.append("基于已确认的记忆继续追问 Lumen。")
         return ReviewRead(
             sources_added=self.sources.list()[:5],
             memories_confirmed=active[:5],

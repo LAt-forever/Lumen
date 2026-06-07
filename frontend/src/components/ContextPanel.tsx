@@ -1,4 +1,5 @@
 import type { ChatResponse } from '../api/types'
+import { formatConfidence } from '../i18n'
 
 type ContextPanelProps = {
   response?: ChatResponse
@@ -7,11 +8,11 @@ type ContextPanelProps = {
 export function ContextPanel({ response }: ContextPanelProps) {
   return (
     <section className="side-panel">
-      <h2>Context Now</h2>
+      <h2>当前上下文</h2>
       {response ? (
         <div className="stack-list">
           <p>
-            Confidence: <strong>{response.confidence}</strong>
+            置信度：<strong>{formatConfidence(response.confidence)}</strong>
           </p>
           {response.citations.map((citation) => (
             <article className="list-row" key={`${citation.source_id}-${citation.chunk_id}`}>
@@ -21,7 +22,7 @@ export function ContextPanel({ response }: ContextPanelProps) {
           ))}
         </div>
       ) : (
-        <p>Sources and recalled memories will appear here.</p>
+        <p>资料来源、引用片段和召回的记忆会显示在这里。</p>
       )}
     </section>
   )

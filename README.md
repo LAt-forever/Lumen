@@ -1,19 +1,44 @@
 # Lumen
 
-Lumen is a personal AI knowledge base and long-term memory assistant.
+Lumen 是一个本地优先的个人 AI 知识库和长期记忆助手。当前版本是 Phase 1 原型，重点是先跑通一个可用闭环：
 
-## Phase 1
+```text
+添加资料
+-> 建立索引
+-> 基于资料提问并查看引用
+-> 从对话中提取待确认记忆
+-> 确认或忽略记忆
+-> 在今日回顾里查看最近变化和下一步建议
+```
 
-The first version focuses on the core loop:
+## 当前能力
 
-- capture notes and sources
-- index knowledge
-- ask questions with citations
-- extract pending memory candidates
-- confirm or ignore memory candidates
-- review recent sources and memories
+- 中文工作台界面。
+- 主要界面、按钮、占位文案、空状态、状态标签和后端兜底回答已中文化。
+- 添加纯文本资料并自动索引。
+- 基于已索引资料提问，回答会显示引用片段和置信度。
+- 针对中文日期问题做聚焦引用，例如询问 `2026年6月1日做了什么工作？` 时优先返回同一天的内容片段。
+- 从对话中提取候选记忆，例如项目、偏好、目标。
+- 在记忆收件箱中确认或忽略候选记忆。
+- 今日回顾会展示资料、记忆和建议动作。
 
-## Run Backend
+## 当前限制
+
+- 现在是本地原型，不是完整生产应用。
+- 回答模式仍是摘录式，不是真正的 LLM 总结；当前不需要模型 API key。
+- 前端左侧导航目前主要是工作台入口，资料库、记忆、搜索、设置等独立页面还未完整实现。
+- 目前前端主要支持粘贴文本资料；PDF 上传、网页抓取、OCR、图片知识库暂未接入界面。
+- 记忆编辑、遗忘、合并尚未在当前 UI 中实现。
+- 后端 API 的置信度字段仍使用内部枚举，例如 `grounded`、`memory-only`、`weak`；前端会显示为中文。
+- 数据默认写入后端目录下的本地 SQLite 数据库 `backend/lumen.db`。
+
+## 环境要求
+
+- Python 3.12+
+- uv
+- Node.js 和 npm
+
+## 启动后端
 
 ```bash
 cd backend
@@ -21,13 +46,19 @@ uv sync
 uv run uvicorn service.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-Health check:
+健康检查：
 
 ```bash
 curl -s http://127.0.0.1:8000/healthz
 ```
 
-## Run Frontend
+期望返回：
+
+```json
+{"status":"ok"}
+```
+
+## 启动前端
 
 ```bash
 cd frontend
@@ -35,15 +66,82 @@ npm install
 npm run dev
 ```
 
-Open `http://127.0.0.1:5173`.
+前端默认调用：
 
-## Test
+```text
+http://127.0.0.1:8000
+```
+
+如果后端地址不同，可以设置 `VITE_API_BASE`。
+
+打开：
+
+```text
+http://127.0.0.1:5173/
+```
+
+## 使用流程
+
+1. 在中间的「询问或记录」输入框粘贴一段资料。
+2. 点击「添加资料」，资料会保存并建立索引。
+3. 在同一个输入框输入问题，点击「询问 Lumen」。
+4. 在「对话」里查看回答。
+5. 在右侧「当前上下文」里查看置信度和引用片段。
+6. 如果右侧「记忆收件箱」出现候选记忆，点击「确认」或「忽略」。
+7. 在「今日回顾」里查看建议动作。
+
+可以用下面的资料做烟测：
+
+```text
+Lumen 是一个本地优先的个人 AI 知识库，用来保存资料、检索知识，并通过确认机制记住用户偏好。
+```
+
+添加资料后提问：
+
+```text
+Lumen 是什么？
+```
+
+也可以添加工作日报后提问：
+
+```text
+2026年6月1日，我完成了 Lumen 中文化界面、日期检索和记忆收件箱烟测。
+```
+
+```text
+2026年6月1日做了什么工作？
+```
+
+触发记忆候选可以输入：
+
+```text
+我喜欢用中文记录项目目标，Lumen 项目的目标是做成本地优先的个人知识库。
+```
+
+期望「记忆收件箱」出现候选记忆，可以点击「确认」或「忽略」。
+
+## 测试和验收
+
+后端：
 
 ```bash
 cd backend
 uv run pytest -v
+```
 
-cd ../frontend
+前端：
+
+```bash
+cd frontend
 npm run test
 npm run build
 ```
+
+端到端烟测：
+
+1. 启动后端和前端。
+2. 打开 `http://127.0.0.1:5173/`。
+3. 添加一条中文资料。
+4. 提问并确认回答有中文内容、引用片段和置信度。
+5. 输入一句包含「项目」「喜欢」「目标」等关键词的话，确认记忆收件箱出现候选记忆。
+6. 点击「确认」或「忽略」，确认界面刷新正常。

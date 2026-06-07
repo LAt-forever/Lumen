@@ -1,4 +1,5 @@
 import type { ChatResponse } from '../api/types'
+import { formatConfidence } from '../i18n'
 
 type ChatPanelProps = {
   response?: ChatResponse
@@ -6,17 +7,17 @@ type ChatPanelProps = {
 
 export function ChatPanel({ response }: ChatPanelProps) {
   return (
-    <section className="center-panel" aria-label="Conversation">
-      <h2>Conversation</h2>
+    <section className="center-panel" aria-label="对话">
+      <h2>对话</h2>
       {response ? (
         <div className="stack-list">
           <p className="answer-text">{response.answer}</p>
           <p>
-            Confidence: <strong>{response.confidence}</strong>
+            置信度：<strong>{formatConfidence(response.confidence)}</strong>
           </p>
         </div>
       ) : (
-        <p>Ask Lumen a question to start a conversation.</p>
+        <p>向 Lumen 提问，开始一段对话。</p>
       )}
     </section>
   )

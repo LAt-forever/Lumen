@@ -6,13 +6,13 @@ import { AppShell } from './components/AppShell'
 const queryClient = new QueryClient()
 
 const navItems = [
-  { label: 'Today', icon: Home },
-  { label: 'Ask', icon: MessageSquare },
-  { label: 'Library', icon: BookOpen },
-  { label: 'Memory', icon: Brain },
-  { label: 'Search', icon: Search },
-  { label: 'Review', icon: Sparkles },
-  { label: 'Settings', icon: Settings },
+  { label: '今天', icon: Home },
+  { label: '提问', icon: MessageSquare },
+  { label: '资料库', icon: BookOpen },
+  { label: '记忆', icon: Brain },
+  { label: '搜索', icon: Search },
+  { label: '回顾', icon: Sparkles },
+  { label: '设置', icon: Settings },
 ]
 
 export default function App() {

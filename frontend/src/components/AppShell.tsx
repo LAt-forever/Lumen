@@ -28,7 +28,7 @@ export function AppShell({ navItems }: AppShellProps) {
           <span className="brand-mark" aria-hidden="true" />
           <span>Lumen</span>
         </div>
-        <nav className="nav-list" aria-label="Primary navigation">
+        <nav className="nav-list" aria-label="主导航">
           {navItems.map((item) => {
             const Icon = item.icon
             return (
@@ -44,12 +44,12 @@ export function AppShell({ navItems }: AppShellProps) {
       <main className="workbench">
         <header className="top-bar">
           <div>
-            <p className="eyebrow">Continue where you left off</p>
-            <h1>Ask, capture, and trust what Lumen remembers.</h1>
+            <p className="eyebrow">从上次停下的地方继续</p>
+            <h1>询问、记录，并信任 Lumen 记住的内容。</h1>
           </div>
-          <div className="system-state" aria-label="Lumen status">
-            <span>Local-first</span>
-            <span>Extractive mode</span>
+          <div className="system-state" aria-label="Lumen 状态">
+            <span>本地优先</span>
+            <span>摘录模式</span>
           </div>
         </header>
 

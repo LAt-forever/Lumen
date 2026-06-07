@@ -1,20 +1,21 @@
 import { useReview } from '../api/hooks'
+import { formatSuggestedAction } from '../i18n'
 
 export function ReviewPanel() {
   const { data: review } = useReview()
   const suggestedActions = review?.suggested_actions ?? []
 
   return (
-    <section className="center-panel" aria-label="Daily Review">
-      <h2>Daily Review</h2>
+    <section className="center-panel" aria-label="今日回顾">
+      <h2>今日回顾</h2>
       {suggestedActions.length > 0 ? (
         <ul className="plain-list">
           {suggestedActions.map((action) => (
-            <li key={action}>{action}</li>
+            <li key={action}>{formatSuggestedAction(action)}</li>
           ))}
         </ul>
       ) : (
-        <p>Add a source to begin.</p>
+        <p>添加一条资料开始使用。</p>
       )}
     </section>
   )
