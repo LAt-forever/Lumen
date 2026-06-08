@@ -101,3 +101,17 @@ def test_chat_creates_pending_memory_candidate():
     assert response.conversation_id > 0
     assert len(pending) == 1
     assert pending[0].memory_type == "project"
+
+
+def test_chat_response_includes_extractive_answer_metadata():
+    _db, sources, knowledge, _memories, chat = make_orchestrator()
+    source = sources.create(
+        SourceCreate(title="Lumen Mode", source_type="note", content="Lumen uses grounded evidence to answer questions.")
+    )
+    knowledge.index_source(source.id)
+
+    response = chat.ask(ChatRequest(message="What does Lumen use to answer questions?"))
+
+    assert response.confidence == "grounded"
+    assert response.answer_mode == "extractive"
+    assert response.fallback_reason is None

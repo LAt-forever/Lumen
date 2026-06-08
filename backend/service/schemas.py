@@ -69,6 +69,8 @@ class ChatResponse(BaseModel):
     citations: list[CitationRead]
     memories: list[UsedMemoryRead]
     confidence: str
+    answer_mode: AnswerMode = "extractive"
+    fallback_reason: str | None = None
 
 
 class MemoryCandidateRead(BaseModel):
