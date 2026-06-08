@@ -6,6 +6,8 @@ type ChatPanelProps = {
 }
 
 export function ChatPanel({ response }: ChatPanelProps) {
+  const answerModeLabel = response?.answer_mode === 'llm' ? 'LLM 模式' : '摘录模式'
+
   return (
     <section className="center-panel" aria-label="对话">
       <h2>对话</h2>
@@ -14,6 +16,9 @@ export function ChatPanel({ response }: ChatPanelProps) {
           <p className="answer-text">{response.answer}</p>
           <p>
             置信度：<strong>{formatConfidence(response.confidence)}</strong>
+          </p>
+          <p>
+            回答模式：<strong>{answerModeLabel}</strong>
           </p>
         </div>
       ) : (

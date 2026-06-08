@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { LucideIcon } from 'lucide-react'
 
+import { useRuntimeSettings } from '../api/hooks'
 import type { ChatResponse } from '../api/types'
 import { CapturePanel } from './CapturePanel'
 import { ChatPanel } from './ChatPanel'
@@ -28,6 +29,8 @@ export function AppShell({ navItems }: AppShellProps) {
   const [lastResponse, setLastResponse] = useState<ChatResponse>()
   const [activeView, setActiveView] = useState<ViewKey>('today')
   const activeItem = navItems.find((item) => item.view === activeView) ?? navItems[0]
+  const runtimeSettings = useRuntimeSettings()
+  const answerModeLabel = runtimeSettings.data?.llm_mode === 'llm' ? 'LLM 模式' : '摘录模式'
 
   const renderCenter = () => {
     if (activeView === 'today') {
@@ -107,7 +110,7 @@ export function AppShell({ navItems }: AppShellProps) {
           </div>
           <div className="system-state" aria-label="Lumen 状态">
             <span>本地优先</span>
-            <span>摘录模式</span>
+            <span>{answerModeLabel}</span>
           </div>
         </header>
 

@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api } from './client'
-import type { ChatResponse, ChunkRead, MemoryCandidateRead, MemoryRead, MemoryUpdate, ReviewRead, SourceRead } from './types'
+import type { ChatResponse, ChunkRead, MemoryCandidateRead, MemoryRead, MemoryUpdate, ReviewRead, RuntimeSettingsRead, SourceRead } from './types'
 
 export function useSources() {
   return useQuery<SourceRead[]>({ queryKey: ['sources'], queryFn: () => api.listSources() as Promise<SourceRead[]> })
@@ -149,4 +149,11 @@ export function useMergeMemory() {
 
 export function useReview() {
   return useQuery<ReviewRead>({ queryKey: ['review'], queryFn: () => api.review() as Promise<ReviewRead> })
+}
+
+export function useRuntimeSettings() {
+  return useQuery<RuntimeSettingsRead>({
+    queryKey: ['settings', 'runtime'],
+    queryFn: () => api.runtimeSettings(),
+  })
 }

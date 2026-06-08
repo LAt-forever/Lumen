@@ -16,6 +16,17 @@ export type ChatResponse = {
   citations: Array<{ source_id: number; source_title: string; chunk_id: number; quote: string }>
   memories: Array<{ id: number; text: string; memory_type: string }>
   confidence: string
+  answer_mode: 'extractive' | 'llm'
+  fallback_reason: string | null
+}
+
+export type RuntimeSettingsRead = {
+  llm_mode: 'extractive' | 'llm'
+  llm_provider: string
+  llm_model: string | null
+  llm_configured: boolean
+  llm_fallback_enabled: boolean
+  embedding_mode: string
 }
 
 export type ChunkRead = {

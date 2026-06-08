@@ -14,6 +14,12 @@ export function ContextPanel({ response }: ContextPanelProps) {
           <p>
             置信度：<strong>{formatConfidence(response.confidence)}</strong>
           </p>
+          {response.fallback_reason ? (
+            <article className="list-row">
+              <strong>回退说明</strong>
+              <p>{response.fallback_reason}</p>
+            </article>
+          ) : null}
           {response.citations.map((citation) => (
             <article className="list-row" key={`${citation.source_id}-${citation.chunk_id}`}>
               <strong>{citation.source_title}</strong>

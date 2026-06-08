@@ -1,4 +1,4 @@
-import type { ChatResponse, ChunkRead, MemoryCandidateRead, MemoryRead, MemoryUpdate, ReviewRead, SourceRead } from './types'
+import type { ChatResponse, ChunkRead, MemoryCandidateRead, MemoryRead, MemoryUpdate, ReviewRead, RuntimeSettingsRead, SourceRead } from './types'
 
 const viteEnv = (import.meta as ImportMeta & { env?: { VITE_API_BASE?: string } }).env
 export const API_BASE = viteEnv?.VITE_API_BASE ?? 'http://127.0.0.1:8000'
@@ -45,4 +45,5 @@ export const api = {
   mergeMemory: (memoryId: number, targetMemoryId: number) =>
     request<MemoryRead>(`/api/memories/${memoryId}/merge`, { method: 'POST', body: JSON.stringify({ target_memory_id: targetMemoryId }) }),
   review: () => request<ReviewRead>('/api/review'),
+  runtimeSettings: () => request<RuntimeSettingsRead>('/api/settings/runtime'),
 }

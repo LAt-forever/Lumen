@@ -134,6 +134,16 @@ describe('Lumen workbench', () => {
             suggested_actions: ['添加一条资料开始使用。'],
           })
         }
+        if (url.endsWith('/api/settings/runtime') && method === 'GET') {
+          return jsonResponse({
+            llm_mode: 'llm',
+            llm_provider: 'openai-compatible',
+            llm_model: 'gpt-test',
+            llm_configured: true,
+            llm_fallback_enabled: true,
+            embedding_mode: 'hash',
+          })
+        }
         if (url.endsWith('/api/chat') && method === 'POST') {
           return jsonResponse({
             conversation_id: 1,
@@ -142,6 +152,8 @@ describe('Lumen workbench', () => {
             citations: [{ source_id: 1, source_title: '验收笔记', chunk_id: 1, quote: 'Lumen 应该引用资料来源。' }],
             memories: [],
             confidence: 'grounded',
+            answer_mode: 'llm',
+            fallback_reason: null,
           })
         }
         if (url.endsWith('/api/memories/candidates/1/confirm') && method === 'POST') {
@@ -225,6 +237,7 @@ describe('Lumen workbench', () => {
     await user.click(screen.getByRole('button', { name: '询问 Lumen' }))
 
     expect(await screen.findByText('带引用的可信回答。')).toBeInTheDocument()
+    expect((await screen.findAllByText('LLM 模式')).length).toBeGreaterThan(0)
     expect(await screen.findByText('验收笔记')).toBeInTheDocument()
     expect(screen.getByText('Lumen 应该引用资料来源。')).toBeInTheDocument()
 
@@ -296,5 +309,10 @@ describe('Lumen workbench', () => {
       'http://127.0.0.1:8000/api/memories/11/merge',
       expect.objectContaining({ method: 'POST' }),
     )
+
+    await user.click(screen.getByRole('button', { name: '设置' }))
+    expect(await screen.findByText('openai-compatible')).toBeInTheDocument()
+    expect(screen.getByText('gpt-test')).toBeInTheDocument()
+    expect(screen.getByText('API key 已配置')).toBeInTheDocument()
   })
 })
