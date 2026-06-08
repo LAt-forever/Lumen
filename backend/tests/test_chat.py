@@ -167,6 +167,13 @@ class FakeChatCompletionClient:
         return "这是基于资料生成的中文总结。"
 
 
+class StreamingFakeChatCompletionClient(FakeChatCompletionClient):
+    def stream(self, messages):
+        self.calls.append(messages)
+        yield "流式"
+        yield "回答"
+
+
 def test_chat_uses_llm_provider_when_evidence_is_grounded():
     _db, sources, knowledge, _memories, chat = make_orchestrator()
     source = sources.create(
@@ -188,6 +195,27 @@ def test_chat_uses_llm_provider_when_evidence_is_grounded():
     assert response.fallback_reason is None
     assert fake_client.calls
     assert "retrieved evidence" in fake_client.calls[0][1]["content"]
+
+
+def test_chat_stream_uses_streaming_llm_provider_when_evidence_is_grounded():
+    _db, sources, knowledge, _memories, chat = make_orchestrator()
+    source = sources.create(
+        SourceCreate(title="Streaming LLM Evidence", source_type="note", content="Streaming providers should emit chunks.")
+    )
+    knowledge.index_source(source.id)
+    fake_client = StreamingFakeChatCompletionClient()
+    chat.answer_provider = OpenAICompatibleAnswerProvider(
+        client=fake_client,
+        fallback_provider=chat.answer_provider,
+        fallback_enabled=True,
+    )
+
+    text = "".join(chat.stream(ChatRequest(message="What should streaming providers emit?")))
+
+    assert 'data: {"text": "流式"}' in text
+    assert 'data: {"text": "回答"}' in text
+    assert '"answer": "流式回答"' in text
+    assert fake_client.calls
 
 
 def test_llm_provider_does_not_run_without_evidence():
@@ -512,3 +540,35 @@ def test_chat_api_reports_missing_llm_config_fallback(client, monkeypatch):
         assert data["fallback_reason"] == "LLM 未配置，已使用摘录模式。"
     finally:
         get_settings.cache_clear()
+
+
+def test_parse_openai_streaming_lines_extracts_content():
+    from service.core.llm import parse_openai_stream_lines
+
+    lines = [
+        'data: {"choices":[{"delta":{"content":"你"}}]}',
+        'data: {"choices":[{"delta":{"content":"好"}}]}',
+        "data: [DONE]",
+    ]
+
+    assert list(parse_openai_stream_lines(lines)) == ["你", "好"]
+
+
+def test_chat_stream_emits_chunk_and_final_events(client):
+    source = client.post(
+        "/api/sources",
+        json={
+            "title": "Streaming Note",
+            "source_type": "note",
+            "content": "Streaming answers still cite evidence.",
+        },
+    ).json()
+    client.post(f"/api/sources/{source['id']}/index")
+
+    response = client.post("/api/chat/stream", json={"message": "What still cites evidence?"})
+
+    assert response.status_code == 200
+    text = response.text
+    assert "event: chunk" in text
+    assert "event: final" in text
+    assert "Streaming answers still cite evidence." in text

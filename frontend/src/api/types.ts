@@ -39,6 +39,41 @@ export type RuntimeSettingsRead = {
   embedding_mode: string
   configuration_hint: string | null
   latest_fallback_reason: string | null
+  runtime_source: 'environment' | 'database-profile'
+  active_profile_id: number | null
+  active_profile_name: string | null
+}
+
+export type LLMProviderProfileRead = {
+  id: number
+  name: string
+  provider: string
+  base_url: string
+  model: string
+  api_key_configured: boolean
+  timeout_seconds: number
+  fallback_enabled: boolean
+  is_active: boolean
+  status: 'untested' | 'ready' | 'failed'
+  last_error: string | null
+  last_checked_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type LLMProviderProfileCreate = {
+  name: string
+  provider: string
+  base_url: string
+  model: string
+  api_key?: string | null
+  timeout_seconds: number
+  fallback_enabled: boolean
+  is_active: boolean
+}
+
+export type LLMProviderProfileUpdate = Partial<LLMProviderProfileCreate> & {
+  clear_api_key?: boolean
 }
 
 export type ChunkRead = EvidenceMatch & {

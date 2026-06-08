@@ -19,6 +19,17 @@ function noContentResponse() {
   } as Response)
 }
 
+function streamResponse(text: string) {
+  const encoder = new TextEncoder()
+  const stream = new ReadableStream({
+    start(controller) {
+      controller.enqueue(encoder.encode(text))
+      controller.close()
+    },
+  })
+  return Promise.resolve(new Response(stream, { status: 200, headers: { 'Content-Type': 'text/event-stream' } }))
+}
+
 describe('Lumen workbench', () => {
   beforeEach(() => {
     vi.spyOn(window, 'confirm').mockReturnValue(true)
@@ -169,6 +180,83 @@ describe('Lumen workbench', () => {
             embedding_mode: 'hash',
             configuration_hint: 'LLM 模式已开启，但模型名称或 API key 未配置。',
             latest_fallback_reason: null,
+            runtime_source: 'environment',
+            active_profile_id: null,
+            active_profile_name: null,
+          })
+        }
+        if (url.endsWith('/api/settings/provider-profiles') && method === 'GET') {
+          return jsonResponse([
+            {
+              id: 21,
+              name: '备用模型',
+              provider: 'openai-compatible',
+              base_url: 'https://backup.example/v1',
+              model: 'gpt-backup',
+              api_key_configured: true,
+              timeout_seconds: 12,
+              fallback_enabled: true,
+              is_active: false,
+              status: 'untested',
+              last_error: null,
+              last_checked_at: null,
+              created_at: '2026-06-05T00:00:00',
+              updated_at: '2026-06-05T00:00:00',
+            },
+          ])
+        }
+        if (url.endsWith('/api/settings/provider-profiles') && method === 'POST') {
+          return jsonResponse({
+            id: 22,
+            name: '主力模型',
+            provider: 'openai-compatible',
+            base_url: 'https://model.example/v1',
+            model: 'gpt-main',
+            api_key_configured: true,
+            timeout_seconds: 20,
+            fallback_enabled: true,
+            is_active: false,
+            status: 'untested',
+            last_error: null,
+            last_checked_at: null,
+            created_at: '2026-06-05T00:00:00',
+            updated_at: '2026-06-05T00:00:00',
+          })
+        }
+        if (url.endsWith('/api/settings/provider-profiles/21/test') && method === 'POST') {
+          return jsonResponse({
+            id: 21,
+            name: '备用模型',
+            provider: 'openai-compatible',
+            base_url: 'https://backup.example/v1',
+            model: 'gpt-backup',
+            api_key_configured: true,
+            timeout_seconds: 12,
+            fallback_enabled: true,
+            is_active: false,
+            status: 'ready',
+            last_error: null,
+            last_checked_at: '2026-06-05T00:00:00',
+            created_at: '2026-06-05T00:00:00',
+            updated_at: '2026-06-05T00:00:00',
+          })
+        }
+        if (url.endsWith('/api/settings/provider-profiles/21/activate') && method === 'POST') {
+          return jsonResponse({
+            id: 21,
+            name: '备用模型',
+            provider: 'openai-compatible',
+            base_url: 'https://backup.example/v1',
+            model: 'gpt-backup',
+            api_key_configured: true,
+            timeout_seconds: 12,
+            fallback_enabled: true,
+            is_active: true,
+            status: 'ready',
+            last_error: null,
+            last_checked_at: '2026-06-05T00:00:00',
+            created_at: '2026-06-05T00:00:00',
+            updated_at: '2026-06-05T00:00:00',
           })
         }
         if (url.endsWith('/api/chat') && method === 'POST') {
@@ -192,6 +280,21 @@ describe('Lumen workbench', () => {
             answer_mode: 'llm',
             fallback_reason: null,
           })
+        }
+        if (url.endsWith('/api/chat/stream') && method === 'POST') {
+          return streamResponse(
+            [
+              'event: chunk',
+              'data: {"text":"带引用的"}',
+              '',
+              'event: chunk',
+              'data: {"text":"可信回答。"}',
+              '',
+              'event: final',
+              'data: {"conversation_id":1,"message_id":2,"answer":"带引用的可信回答。","citations":[{"source_id":1,"source_title":"验收笔记","chunk_id":1,"quote":"Lumen 应该引用资料来源。","matched_terms":["Lumen","引用"],"matched_date":null,"match_reason":"匹配关键词：Lumen、引用"}],"memories":[],"confidence":"grounded","answer_mode":"llm","fallback_reason":null}',
+              '',
+            ].join('\n'),
+          )
         }
         if (url.endsWith('/api/memories/candidates/1/confirm') && method === 'POST') {
           return jsonResponse({
@@ -379,5 +482,58 @@ describe('Lumen workbench', () => {
     expect(screen.getByText('gpt-test')).toBeInTheDocument()
     expect(screen.getByText('API key 已配置')).toBeInTheDocument()
     expect(screen.getByText('LLM 模式已开启，但模型名称或 API key 未配置。')).toBeInTheDocument()
+  })
+
+  it('manages SQLite-backed model provider profiles from settings', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(screen.getByRole('button', { name: '设置' }))
+
+    expect(await screen.findByText('备用模型')).toBeInTheDocument()
+    expect(screen.getByText('gpt-backup')).toBeInTheDocument()
+
+    await user.type(screen.getByLabelText('配置名称'), '主力模型')
+    await user.clear(screen.getByLabelText('Base URL'))
+    await user.type(screen.getByLabelText('Base URL'), 'https://model.example/v1')
+    await user.type(screen.getByLabelText('模型名称'), 'gpt-main')
+    await user.type(screen.getByLabelText('API key'), 'new-secret-key')
+    await user.clear(screen.getByLabelText('超时秒数'))
+    await user.type(screen.getByLabelText('超时秒数'), '20')
+    await user.click(screen.getByRole('button', { name: '保存模型配置' }))
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:8000/api/settings/provider-profiles',
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.stringContaining('new-secret-key'),
+      }),
+    )
+
+    await user.click(screen.getByRole('button', { name: '测试连接' }))
+    expect(fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:8000/api/settings/provider-profiles/21/test',
+      expect.objectContaining({ method: 'POST' }),
+    )
+
+    await user.click(screen.getByRole('button', { name: '设为当前' }))
+    expect(fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:8000/api/settings/provider-profiles/21/activate',
+      expect.objectContaining({ method: 'POST' }),
+    )
+  })
+
+  it('uses the streaming chat endpoint for questions', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.type(screen.getByLabelText('询问 Lumen'), 'Lumen 应该引用什么？')
+    await user.click(screen.getByRole('button', { name: '询问 Lumen' }))
+
+    expect(await screen.findByText('带引用的可信回答。')).toBeInTheDocument()
+    expect(fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:8000/api/chat/stream',
+      expect.objectContaining({ method: 'POST' }),
+    )
   })
 })

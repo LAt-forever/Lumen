@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from service.db import Base
@@ -90,5 +90,24 @@ class Memory(Base):
     memory_type: Mapped[str] = mapped_column(String(40), nullable=False)
     provenance: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(String(40), default="active", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class LLMProviderProfile(Base):
+    __tablename__ = "llm_provider_profiles"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    provider: Mapped[str] = mapped_column(String(80), default="openai-compatible", nullable=False)
+    base_url: Mapped[str] = mapped_column(String(1000), nullable=False)
+    model: Mapped[str] = mapped_column(String(200), nullable=False)
+    api_key: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    timeout_seconds: Mapped[float] = mapped_column(Float, default=30.0, nullable=False)
+    fallback_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    status: Mapped[str] = mapped_column(String(40), default="untested", nullable=False)
+    last_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    last_checked_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)

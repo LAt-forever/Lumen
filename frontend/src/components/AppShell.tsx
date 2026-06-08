@@ -27,17 +27,40 @@ type AppShellProps = {
 
 export function AppShell({ navItems }: AppShellProps) {
   const [lastResponse, setLastResponse] = useState<ChatResponse>()
+  const [streamingAnswer, setStreamingAnswer] = useState('')
+  const [isStreaming, setIsStreaming] = useState(false)
   const [activeView, setActiveView] = useState<ViewKey>('today')
   const activeItem = navItems.find((item) => item.view === activeView) ?? navItems[0]
   const runtimeSettings = useRuntimeSettings()
   const answerModeLabel = runtimeSettings.data?.llm_mode === 'llm' ? 'LLM 模式' : '摘录模式'
 
+  const handleResponse = (response: ChatResponse) => {
+    setLastResponse(response)
+    setStreamingAnswer('')
+    setIsStreaming(false)
+  }
+
+  const handleStreamStart = () => {
+    setLastResponse(undefined)
+    setStreamingAnswer('')
+    setIsStreaming(true)
+  }
+
+  const handleStreamChunk = (text: string) => {
+    setStreamingAnswer((current) => `${current}${text}`)
+  }
+
+  const capturePanel = (
+    <CapturePanel onResponse={handleResponse} onStreamChunk={handleStreamChunk} onStreamStart={handleStreamStart} />
+  )
+  const chatPanel = <ChatPanel isStreaming={isStreaming} response={lastResponse} streamingAnswer={streamingAnswer} />
+
   const renderCenter = () => {
     if (activeView === 'today') {
       return (
         <>
-          <CapturePanel onResponse={setLastResponse} />
-          {lastResponse ? <ChatPanel response={lastResponse} /> : null}
+          {capturePanel}
+          {lastResponse || isStreaming ? chatPanel : null}
           <SourceList />
           <ReviewPanel />
         </>
@@ -46,15 +69,15 @@ export function AppShell({ navItems }: AppShellProps) {
     if (activeView === 'ask') {
       return (
         <>
-          <CapturePanel onResponse={setLastResponse} />
-          <ChatPanel response={lastResponse} />
+          {capturePanel}
+          {chatPanel}
         </>
       )
     }
     if (activeView === 'library') {
       return (
         <>
-          <CapturePanel onResponse={setLastResponse} />
+          {capturePanel}
           <SourceList />
         </>
       )

@@ -1,20 +1,23 @@
 import { FormEvent, useState } from 'react'
 
-import { useAskLumen, useCaptureLink, useCreateSource, useUploadSource } from '../api/hooks'
+import { useAskLumen, useAskLumenStream, useCaptureLink, useCreateSource, useUploadSource } from '../api/hooks'
 import type { ChatResponse } from '../api/types'
 
 type CapturePanelProps = {
   onResponse?: (response: ChatResponse) => void
+  onStreamChunk?: (text: string) => void
+  onStreamStart?: () => void
 }
 
 type CaptureMode = 'note' | 'file' | 'link'
 
-export function CapturePanel({ onResponse }: CapturePanelProps) {
+export function CapturePanel({ onResponse, onStreamChunk, onStreamStart }: CapturePanelProps) {
   const [mode, setMode] = useState<CaptureMode>('note')
   const [draft, setDraft] = useState('')
   const [selectedFile, setSelectedFile] = useState<File>()
   const [link, setLink] = useState('')
   const askLumen = useAskLumen()
+  const askLumenStream = useAskLumenStream()
   const createSource = useCreateSource()
   const uploadSource = useUploadSource()
   const captureLink = useCaptureLink()
@@ -23,7 +26,17 @@ export function CapturePanel({ onResponse }: CapturePanelProps) {
     event.preventDefault()
     const message = draft.trim()
     if (mode === 'note' && message) {
-      askLumen.mutate(message, { onSuccess: (response) => onResponse?.(response) })
+      onStreamStart?.()
+      askLumenStream.mutate(
+        { message, onChunk: (text) => onStreamChunk?.(text) },
+        {
+          onError: () => {
+            onStreamStart?.()
+            askLumen.mutate(message, { onSuccess: (response) => onResponse?.(response) })
+          },
+          onSuccess: (response) => onResponse?.(response),
+        },
+      )
     }
   }
 
@@ -47,7 +60,8 @@ export function CapturePanel({ onResponse }: CapturePanelProps) {
     }
   }
 
-  const isBusy = askLumen.isPending || createSource.isPending || uploadSource.isPending || captureLink.isPending
+  const isBusy =
+    askLumen.isPending || askLumenStream.isPending || createSource.isPending || uploadSource.isPending || captureLink.isPending
   const canUseDraft = mode === 'note' && Boolean(draft.trim())
 
   return (

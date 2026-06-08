@@ -4,6 +4,9 @@ import { api } from './client'
 import type {
   ChatResponse,
   ChunkRead,
+  LLMProviderProfileCreate,
+  LLMProviderProfileRead,
+  LLMProviderProfileUpdate,
   MemoryCandidateRead,
   MemoryDuplicateSuggestionRead,
   MemoryRead,
@@ -92,6 +95,17 @@ export function useAskLumen() {
   const queryClient = useQueryClient()
   return useMutation<ChatResponse, Error, string>({
     mutationFn: (message) => api.ask(message) as Promise<ChatResponse>,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['memories', 'pending'] })
+      await queryClient.invalidateQueries({ queryKey: ['review'] })
+    },
+  })
+}
+
+export function useAskLumenStream() {
+  const queryClient = useQueryClient()
+  return useMutation<ChatResponse, Error, { message: string; onChunk: (text: string) => void }>({
+    mutationFn: ({ message, onChunk }) => api.askStream(message, { onChunk }) as Promise<ChatResponse>,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['memories', 'pending'] })
       await queryClient.invalidateQueries({ queryKey: ['review'] })
@@ -194,4 +208,44 @@ export function useRuntimeSettings() {
     queryKey: ['settings', 'runtime'],
     queryFn: () => api.runtimeSettings(),
   })
+}
+
+function useProviderProfileMutation<TInput>(mutationFn: (input: TInput) => Promise<LLMProviderProfileRead | void>) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['settings', 'provider-profiles'] })
+      await queryClient.invalidateQueries({ queryKey: ['settings', 'runtime'] })
+    },
+  })
+}
+
+export function useProviderProfiles() {
+  return useQuery<LLMProviderProfileRead[]>({
+    queryKey: ['settings', 'provider-profiles'],
+    queryFn: () => api.listProviderProfiles(),
+  })
+}
+
+export function useCreateProviderProfile() {
+  return useProviderProfileMutation<LLMProviderProfileCreate>(api.createProviderProfile)
+}
+
+export function useUpdateProviderProfile() {
+  return useProviderProfileMutation<{ profileId: number; payload: LLMProviderProfileUpdate }>(({ profileId, payload }) =>
+    api.updateProviderProfile(profileId, payload),
+  )
+}
+
+export function useActivateProviderProfile() {
+  return useProviderProfileMutation<number>(api.activateProviderProfile)
+}
+
+export function useTestProviderProfile() {
+  return useProviderProfileMutation<number>(api.testProviderProfile)
+}
+
+export function useDeleteProviderProfile() {
+  return useProviderProfileMutation<number>(api.deleteProviderProfile)
 }

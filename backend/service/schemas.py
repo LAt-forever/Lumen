@@ -9,6 +9,7 @@ MemoryCandidateStatus = Literal["pending", "confirmed", "ignored", "merged"]
 MemoryStatus = Literal["active", "edited", "forgotten", "merged"]
 MemoryType = Literal["preference", "fact", "project", "relationship", "goal", "event", "note"]
 AnswerMode = Literal["extractive", "llm"]
+ProviderProfileStatus = Literal["untested", "ready", "failed"]
 
 
 class SourceCreate(BaseModel):
@@ -141,3 +142,48 @@ class RuntimeSettingsRead(BaseModel):
     embedding_mode: str
     configuration_hint: str | None = None
     latest_fallback_reason: str | None = None
+    runtime_source: str = "environment"
+    active_profile_id: int | None = None
+    active_profile_name: str | None = None
+
+
+class LLMProviderProfileCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    provider: str = Field(default="openai-compatible", min_length=1, max_length=80)
+    base_url: str = Field(min_length=1, max_length=1000)
+    model: str = Field(min_length=1, max_length=200)
+    api_key: str | None = None
+    timeout_seconds: float = Field(default=30.0, gt=0)
+    fallback_enabled: bool = True
+    is_active: bool = False
+
+
+class LLMProviderProfileUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    provider: str | None = Field(default=None, min_length=1, max_length=80)
+    base_url: str | None = Field(default=None, min_length=1, max_length=1000)
+    model: str | None = Field(default=None, min_length=1, max_length=200)
+    api_key: str | None = None
+    clear_api_key: bool = False
+    timeout_seconds: float | None = Field(default=None, gt=0)
+    fallback_enabled: bool | None = None
+    is_active: bool | None = None
+
+
+class LLMProviderProfileRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    provider: str
+    base_url: str
+    model: str
+    api_key_configured: bool
+    timeout_seconds: float
+    fallback_enabled: bool
+    is_active: bool
+    status: ProviderProfileStatus
+    last_error: str | None
+    last_checked_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
