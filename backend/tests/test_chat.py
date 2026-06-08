@@ -66,6 +66,17 @@ def test_chat_answer_includes_citation():
     assert response.citations[0].source_title == "Lumen Principles"
 
 
+def test_chat_citation_includes_match_explanation():
+    _db, sources, knowledge, _memories, chat = make_orchestrator()
+    source = sources.create(SourceCreate(title="Lumen 检索", source_type="note", content="Lumen 检索需要展示引用原因。"))
+    knowledge.index_source(source.id)
+
+    response = chat.ask(ChatRequest(message="Lumen 检索"))
+
+    assert response.citations[0].matched_terms
+    assert "匹配关键词" in response.citations[0].match_reason
+
+
 def test_chat_does_not_ground_answer_on_unrelated_hash_collision():
     _db, sources, knowledge, _memories, chat = make_orchestrator()
     source = sources.create(

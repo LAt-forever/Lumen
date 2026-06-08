@@ -44,6 +44,7 @@ export function SearchPanel() {
             <article className="list-row" key={result.id}>
               <strong>{result.source_title}</strong>
               <p>{result.text}</p>
+              {result.match_reason ? <p>{result.match_reason}</p> : null}
               <p>相关度：{result.score.toFixed(2)}</p>
             </article>
           ))}

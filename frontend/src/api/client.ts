@@ -1,4 +1,15 @@
-import type { ChatResponse, ChunkRead, MemoryCandidateRead, MemoryRead, MemoryUpdate, ReviewRead, RuntimeSettingsRead, SourceRead } from './types'
+import type {
+  ChatResponse,
+  ChunkRead,
+  MemoryCandidateRead,
+  MemoryDuplicateSuggestionRead,
+  MemoryRead,
+  MemoryUpdate,
+  ReviewRead,
+  RuntimeSettingsRead,
+  SourceDetailRead,
+  SourceRead,
+} from './types'
 
 const viteEnv = (import.meta as ImportMeta & { env?: { VITE_API_BASE?: string } }).env
 export const API_BASE = viteEnv?.VITE_API_BASE ?? 'http://127.0.0.1:8000'
@@ -12,11 +23,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (!response.ok) {
     throw new Error(await response.text())
   }
+  if (response.status === 204) {
+    return undefined as T
+  }
   return response.json() as Promise<T>
 }
 
 export const api = {
   listSources: () => request<SourceRead[]>('/api/sources'),
+  getSource: (sourceId: number) => request<SourceDetailRead>(`/api/sources/${sourceId}`),
   createSource: (payload: { title: string; source_type: 'note'; content: string }) =>
     request<SourceRead>('/api/sources', { method: 'POST', body: JSON.stringify(payload) }),
   uploadSource: (file: File) => {
@@ -27,6 +42,7 @@ export const api = {
   captureLink: (url: string) =>
     request<SourceRead>('/api/sources/link', { method: 'POST', body: JSON.stringify({ url }) }),
   indexSource: (sourceId: number) => request<SourceRead>(`/api/sources/${sourceId}/index`, { method: 'POST' }),
+  deleteSource: (sourceId: number) => request<void>(`/api/sources/${sourceId}`, { method: 'DELETE' }),
   search: (query: string) => request<ChunkRead[]>(`/api/search?${new URLSearchParams({ q: query }).toString()}`),
   ask: (message: string, conversationId?: number) =>
     request<ChatResponse>('/api/chat', {
@@ -44,6 +60,7 @@ export const api = {
   forgetMemory: (memoryId: number) => request<MemoryRead>(`/api/memories/${memoryId}/forget`, { method: 'POST' }),
   mergeMemory: (memoryId: number, targetMemoryId: number) =>
     request<MemoryRead>(`/api/memories/${memoryId}/merge`, { method: 'POST', body: JSON.stringify({ target_memory_id: targetMemoryId }) }),
+  duplicateMemorySuggestions: () => request<MemoryDuplicateSuggestionRead[]>('/api/memories/duplicate-suggestions'),
   review: () => request<ReviewRead>('/api/review'),
   runtimeSettings: () => request<RuntimeSettingsRead>('/api/settings/runtime'),
 }

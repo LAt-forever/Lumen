@@ -2,6 +2,7 @@ import re
 
 from service.models import Memory, MemoryCandidate
 from service.repositories.memories import MemoryRepository
+from service.schemas import MemoryDuplicateSuggestionRead
 
 
 _LATIN_TERM_RE = re.compile(r"[a-z0-9]+")
@@ -58,6 +59,32 @@ class MemoryService:
         scored.sort(key=lambda item: item[0], reverse=True)
         return [memory for _, memory in scored[:limit]]
 
+    def duplicate_suggestions(self, threshold: float = 0.6) -> list[MemoryDuplicateSuggestionRead]:
+        memories = self.memories.active_memories()
+        suggestions: list[MemoryDuplicateSuggestionRead] = []
+        for source_index, source in enumerate(memories):
+            source_terms = self._search_terms(source.text)
+            if not source_terms:
+                continue
+            for target in memories[source_index + 1 :]:
+                target_terms = self._search_terms(target.text)
+                if not target_terms:
+                    continue
+                overlap_score = self._overlap_score(source_terms, target_terms)
+                if overlap_score < threshold:
+                    continue
+                suggestions.append(
+                    MemoryDuplicateSuggestionRead(
+                        source_memory_id=source.id,
+                        target_memory_id=target.id,
+                        source_text=source.text,
+                        target_text=target.text,
+                        overlap_score=round(overlap_score, 3),
+                    )
+                )
+        suggestions.sort(key=lambda item: (-item.overlap_score, item.source_memory_id, item.target_memory_id))
+        return suggestions
+
     def _classify(self, text: str, lowered: str) -> str | None:
         if any(marker in text for marker in ["正在做", "项目", "project"]):
             return "project"
@@ -83,3 +110,9 @@ class MemoryService:
             run = match.group(0)
             terms.update(run[index : index + 2] for index in range(len(run) - 1))
         return terms
+
+    def _overlap_score(self, source_terms: set[str], target_terms: set[str]) -> float:
+        denominator = min(len(source_terms), len(target_terms))
+        if denominator == 0:
+            return 0.0
+        return len(source_terms.intersection(target_terms)) / denominator

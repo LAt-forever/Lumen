@@ -2,7 +2,7 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 
 import httpx
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile
 from sqlalchemy.orm import Session
 
 from service.core.knowledge import KnowledgeService
@@ -10,7 +10,7 @@ from service.core.parsing import parse_html, parse_pdf
 from service.db import get_db
 from service.repositories.chunks import ChunkRepository
 from service.repositories.sources import SourceRepository
-from service.schemas import LinkCapture, SourceCreate, SourceRead
+from service.schemas import LinkCapture, SourceCreate, SourceDetailRead, SourceRead
 
 router = APIRouter(prefix="/api/sources", tags=["sources"])
 
@@ -107,6 +107,27 @@ def list_sources(db: Session = Depends(get_db)):
     return SourceRepository(db).list()
 
 
+@router.get("/{source_id}", response_model=SourceDetailRead)
+def get_source(source_id: int, db: Session = Depends(get_db)):
+    sources = SourceRepository(db)
+    source = sources.get(source_id)
+    if source is None:
+        raise HTTPException(status_code=404, detail="Source not found")
+    return SourceDetailRead.model_validate(
+        {
+            "id": source.id,
+            "title": source.title,
+            "source_type": source.source_type,
+            "status": source.status,
+            "url": source.url,
+            "filename": source.filename,
+            "error_message": source.error_message,
+            "created_at": source.created_at,
+            "chunk_count": ChunkRepository(db).count_for_source(source.id),
+        }
+    )
+
+
 @router.post("/{source_id}/index", response_model=SourceRead)
 def index_source(source_id: int, db: Session = Depends(get_db)):
     sources = SourceRepository(db)
@@ -118,3 +139,13 @@ def index_source(source_id: int, db: Session = Depends(get_db)):
     if source is None:
         raise HTTPException(status_code=404, detail="Source not found")
     return source
+
+
+@router.delete("/{source_id}", status_code=204)
+def delete_source(source_id: int, db: Session = Depends(get_db)):
+    sources = SourceRepository(db)
+    if sources.get(source_id) is None:
+        raise HTTPException(status_code=404, detail="Source not found")
+    ChunkRepository(db).delete_for_source(source_id)
+    sources.delete(source_id)
+    return Response(status_code=204)

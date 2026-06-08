@@ -56,6 +56,42 @@ def test_search_prioritizes_chinese_source_with_matching_terms():
     assert "个人 AI 知识库" in results[0].text
 
 
+def test_search_explains_chinese_term_matches():
+    db, service = make_service()
+    source = service.sources.create(
+        SourceCreate(
+            title="Lumen 日志",
+            source_type="note",
+            content="Lumen 检索需要展示引用原因。",
+        )
+    )
+    service.index_source(source.id)
+
+    results = service.search("Lumen 检索", limit=5)
+
+    assert results
+    assert results[0].matched_terms
+    assert "匹配关键词" in results[0].match_reason
+
+
+def test_search_explains_date_matches():
+    db, service = make_service()
+    source = service.sources.create(
+        SourceCreate(
+            title="日报",
+            source_type="note",
+            content="2026年6月1日 完成 Lumen 日期检索。",
+        )
+    )
+    service.index_source(source.id)
+
+    results = service.search("2026年6月1日 Lumen 做了什么", limit=5)
+
+    assert results
+    assert results[0].matched_date == "2026-06-01"
+    assert "匹配日期 2026-06-01" in results[0].match_reason
+
+
 def test_search_does_not_return_unrelated_date_when_no_terms_match():
     db, service = make_service()
     source = service.sources.create(

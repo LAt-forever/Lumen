@@ -22,6 +22,13 @@ class SourceRepository:
     def list(self) -> list[Source]:
         return list(self.db.scalars(select(Source).order_by(Source.created_at.desc(), Source.id.desc())))
 
+    def delete(self, source_id: int) -> None:
+        source = self.db.get(Source, source_id)
+        if source is None:
+            raise ValueError(f"source {source_id} not found")
+        self.db.delete(source)
+        self.db.commit()
+
     def mark_parsing(self, source_id: int) -> None:
         self._set_status(source_id, "parsing", None)
 

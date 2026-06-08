@@ -24,6 +24,7 @@ export function ContextPanel({ response }: ContextPanelProps) {
             <article className="list-row" key={`${citation.source_id}-${citation.chunk_id}`}>
               <strong>{citation.source_title}</strong>
               <p>{citation.quote}</p>
+              {citation.match_reason ? <p>{citation.match_reason}</p> : null}
             </article>
           ))}
         </div>

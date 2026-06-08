@@ -11,8 +11,17 @@ function jsonResponse(body: unknown) {
   } as Response)
 }
 
+function noContentResponse() {
+  return Promise.resolve({
+    ok: true,
+    status: 204,
+    json: () => Promise.resolve(undefined),
+  } as Response)
+}
+
 describe('Lumen workbench', () => {
   beforeEach(() => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
     vi.stubGlobal(
       'fetch',
       vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
@@ -32,6 +41,22 @@ describe('Lumen workbench', () => {
               created_at: '2026-06-05T00:00:00',
             },
           ])
+        }
+        if (url.endsWith('/api/sources/7') && method === 'GET') {
+          return jsonResponse({
+            id: 7,
+            title: '已有资料',
+            source_type: 'note',
+            status: 'indexed',
+            url: null,
+            filename: null,
+            error_message: null,
+            created_at: '2026-06-05T00:00:00',
+            chunk_count: 2,
+          })
+        }
+        if (url.endsWith('/api/sources/7') && method === 'DELETE') {
+          return noContentResponse()
         }
         if (url.endsWith('/api/sources/upload') && method === 'POST') {
           return jsonResponse({
@@ -142,6 +167,8 @@ describe('Lumen workbench', () => {
             llm_configured: true,
             llm_fallback_enabled: true,
             embedding_mode: 'hash',
+            configuration_hint: 'LLM 模式已开启，但模型名称或 API key 未配置。',
+            latest_fallback_reason: null,
           })
         }
         if (url.endsWith('/api/chat') && method === 'POST') {
@@ -149,7 +176,17 @@ describe('Lumen workbench', () => {
             conversation_id: 1,
             message_id: 2,
             answer: '带引用的可信回答。',
-            citations: [{ source_id: 1, source_title: '验收笔记', chunk_id: 1, quote: 'Lumen 应该引用资料来源。' }],
+            citations: [
+              {
+                source_id: 1,
+                source_title: '验收笔记',
+                chunk_id: 1,
+                quote: 'Lumen 应该引用资料来源。',
+                matched_terms: ['Lumen', '引用'],
+                matched_date: null,
+                match_reason: '匹配关键词：Lumen、引用',
+              },
+            ],
             memories: [],
             confidence: 'grounded',
             answer_mode: 'llm',
@@ -177,6 +214,20 @@ describe('Lumen workbench', () => {
               source_title: 'https://example.com/lumen',
               text: 'Lumen link capture should be searchable.',
               score: 4.2,
+              matched_terms: ['capture', 'link'],
+              matched_date: null,
+              match_reason: '匹配关键词：capture、link',
+            },
+          ])
+        }
+        if (url.endsWith('/api/memories/duplicate-suggestions') && method === 'GET') {
+          return jsonResponse([
+            {
+              source_memory_id: 11,
+              target_memory_id: 10,
+              source_text: 'Lumen 是当前个人知识库项目。',
+              target_text: '用户喜欢引用清楚的回答。',
+              overlap_score: 0.72,
             },
           ])
         }
@@ -240,6 +291,7 @@ describe('Lumen workbench', () => {
     expect((await screen.findAllByText('LLM 模式')).length).toBeGreaterThan(0)
     expect(await screen.findByText('验收笔记')).toBeInTheDocument()
     expect(screen.getByText('Lumen 应该引用资料来源。')).toBeInTheDocument()
+    expect(screen.getByText('匹配关键词：Lumen、引用')).toBeInTheDocument()
 
     await user.click(screen.getAllByRole('button', { name: '确认' })[0])
     await user.click(screen.getAllByRole('button', { name: '忽略' })[1])
@@ -259,6 +311,14 @@ describe('Lumen workbench', () => {
     render(<App />)
 
     await user.click(screen.getByRole('button', { name: '资料库' }))
+    await user.click(screen.getByRole('button', { name: '查看详情' }))
+    expect(await screen.findByText('索引片段：2')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '删除资料' }))
+    expect(fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:8000/api/sources/7',
+      expect.objectContaining({ method: 'DELETE' }),
+    )
+
     await user.click(screen.getByRole('button', { name: '文件' }))
     const file = new File(['Lumen Phase 1.1 file upload.'], 'phase-1-1.txt', { type: 'text/plain' })
     await user.upload(screen.getByLabelText('选择资料文件'), file)
@@ -283,9 +343,13 @@ describe('Lumen workbench', () => {
     await user.click(screen.getByRole('button', { name: '执行搜索' }))
 
     expect(await screen.findByText('Lumen link capture should be searchable.')).toBeInTheDocument()
+    expect(screen.getByText('匹配关键词：capture、link')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: '记忆' }))
     expect(await screen.findByText('用户喜欢引用清楚的回答。')).toBeInTheDocument()
+    expect(screen.getByText('来源：message:1')).toBeInTheDocument()
+    expect(await screen.findByText('可能重复记忆')).toBeInTheDocument()
+    expect(screen.getByText('相似度：0.72')).toBeInTheDocument()
 
     await user.click(screen.getAllByRole('button', { name: '编辑' })[0])
     await user.clear(screen.getByLabelText('记忆内容'))
@@ -314,5 +378,6 @@ describe('Lumen workbench', () => {
     expect(await screen.findByText('openai-compatible')).toBeInTheDocument()
     expect(screen.getByText('gpt-test')).toBeInTheDocument()
     expect(screen.getByText('API key 已配置')).toBeInTheDocument()
+    expect(screen.getByText('LLM 模式已开启，但模型名称或 API key 未配置。')).toBeInTheDocument()
   })
 })

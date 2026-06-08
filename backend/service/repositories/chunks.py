@@ -1,7 +1,7 @@
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from service.models import SourceChunk
+from service.models import Citation, SourceChunk
 
 
 class ChunkRepository:
@@ -22,3 +22,11 @@ class ChunkRepository:
 
     def list_all(self) -> list[SourceChunk]:
         return list(self.db.scalars(select(SourceChunk).order_by(SourceChunk.id.asc())))
+
+    def count_for_source(self, source_id: int) -> int:
+        return len(list(self.db.scalars(select(SourceChunk.id).where(SourceChunk.source_id == source_id))))
+
+    def delete_for_source(self, source_id: int) -> None:
+        self.db.execute(delete(Citation).where(Citation.source_id == source_id))
+        self.db.execute(delete(SourceChunk).where(SourceChunk.source_id == source_id))
+        self.db.commit()

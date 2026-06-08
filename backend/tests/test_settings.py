@@ -29,6 +29,8 @@ def test_runtime_settings_omits_api_key(client, monkeypatch):
         "llm_configured": True,
         "llm_fallback_enabled": True,
         "embedding_mode": "hash",
+        "configuration_hint": None,
+        "latest_fallback_reason": None,
     }
     assert "secret-value" not in response.text
 
@@ -51,3 +53,20 @@ def test_runtime_settings_defaults_to_extractive(client, monkeypatch):
     assert data["llm_configured"] is False
     assert data["llm_fallback_enabled"] is True
     assert data["embedding_mode"] == "hash"
+    assert data["configuration_hint"] is None
+    assert data["latest_fallback_reason"] is None
+
+
+def test_runtime_settings_reports_missing_llm_configuration_hint(client, monkeypatch):
+    monkeypatch.setenv("LUMEN_LLM_MODE", "llm")
+    monkeypatch.delenv("LUMEN_LLM_MODEL", raising=False)
+    monkeypatch.delenv("LUMEN_LLM_API_KEY", raising=False)
+
+    response = client.get("/api/settings/runtime")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["llm_configured"] is False
+    assert data["configuration_hint"] == "LLM 模式已开启，但模型名称或 API key 未配置。"
+    assert data["latest_fallback_reason"] is None
+    assert "api_key" not in data

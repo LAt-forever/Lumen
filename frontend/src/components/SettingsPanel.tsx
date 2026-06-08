@@ -42,6 +42,18 @@ export function SettingsPanel() {
           <strong>失败策略</strong>
           <p>{fallbackStatus}</p>
         </article>
+        {settings?.configuration_hint ? (
+          <article className="list-row">
+            <strong>配置提示</strong>
+            <p>{settings.configuration_hint}</p>
+          </article>
+        ) : null}
+        {settings?.latest_fallback_reason ? (
+          <article className="list-row">
+            <strong>最近回退</strong>
+            <p>{settings.latest_fallback_reason}</p>
+          </article>
+        ) : null}
         <article className="list-row">
           <strong>数据策略</strong>
           <p>模型密钥只从本地环境变量读取，不会写入数据库。</p>

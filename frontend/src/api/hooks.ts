@@ -1,10 +1,29 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api } from './client'
-import type { ChatResponse, ChunkRead, MemoryCandidateRead, MemoryRead, MemoryUpdate, ReviewRead, RuntimeSettingsRead, SourceRead } from './types'
+import type {
+  ChatResponse,
+  ChunkRead,
+  MemoryCandidateRead,
+  MemoryDuplicateSuggestionRead,
+  MemoryRead,
+  MemoryUpdate,
+  ReviewRead,
+  RuntimeSettingsRead,
+  SourceDetailRead,
+  SourceRead,
+} from './types'
 
 export function useSources() {
   return useQuery<SourceRead[]>({ queryKey: ['sources'], queryFn: () => api.listSources() as Promise<SourceRead[]> })
+}
+
+export function useSourceDetail(sourceId?: number) {
+  return useQuery<SourceDetailRead>({
+    queryKey: ['sources', sourceId],
+    queryFn: () => api.getSource(sourceId as number),
+    enabled: typeof sourceId === 'number',
+  })
 }
 
 export function useCreateSource() {
@@ -52,6 +71,18 @@ export function useIndexSource() {
     mutationFn: api.indexSource,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['sources'] })
+      await queryClient.invalidateQueries({ queryKey: ['review'] })
+    },
+  })
+}
+
+export function useDeleteSource() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: api.deleteSource,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['sources'] })
+      await queryClient.invalidateQueries({ queryKey: ['search'] })
       await queryClient.invalidateQueries({ queryKey: ['review'] })
     },
   })
@@ -144,6 +175,13 @@ export function useMergeMemory() {
       await queryClient.invalidateQueries({ queryKey: ['memories', 'active'] })
       await queryClient.invalidateQueries({ queryKey: ['review'] })
     },
+  })
+}
+
+export function useDuplicateMemorySuggestions() {
+  return useQuery<MemoryDuplicateSuggestionRead[]>({
+    queryKey: ['memories', 'duplicates'],
+    queryFn: () => api.duplicateMemorySuggestions(),
   })
 }
 

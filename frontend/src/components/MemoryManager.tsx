@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-import { useForgetMemory, useMemories, useMergeMemory, useUpdateMemory } from '../api/hooks'
+import { useDuplicateMemorySuggestions, useForgetMemory, useMemories, useMergeMemory, useUpdateMemory } from '../api/hooks'
 import type { MemoryRead } from '../api/types'
 import { formatMemoryType } from '../i18n'
 
@@ -14,6 +14,7 @@ type EditState = {
 
 export function MemoryManager() {
   const { data: memories = [] } = useMemories()
+  const { data: duplicateSuggestions = [] } = useDuplicateMemorySuggestions()
   const updateMemory = useUpdateMemory()
   const forgetMemory = useForgetMemory()
   const mergeMemory = useMergeMemory()
@@ -87,6 +88,7 @@ export function MemoryManager() {
                   <>
                     <strong>{formatMemoryType(memory.memory_type)}</strong>
                     <p>{memory.text}</p>
+                    <p>来源：{memory.provenance}</p>
                     <div className="memory-actions">
                       <button disabled={isBusy} onClick={() => startEdit(memory)} type="button">
                         编辑
@@ -127,6 +129,34 @@ export function MemoryManager() {
               </article>
             )
           })}
+          {duplicateSuggestions.length > 0 ? (
+            <article className="list-row">
+              <strong>可能重复记忆</strong>
+              {duplicateSuggestions.map((suggestion) => (
+                <div className="merge-row" key={`${suggestion.source_memory_id}-${suggestion.target_memory_id}`}>
+                  <p>
+                    #{suggestion.source_memory_id} {suggestion.source_text}
+                  </p>
+                  <p>
+                    #{suggestion.target_memory_id} {suggestion.target_text}
+                  </p>
+                  <p>相似度：{suggestion.overlap_score.toFixed(2)}</p>
+                  <button
+                    disabled={isBusy}
+                    onClick={() =>
+                      mergeMemory.mutate({
+                        memoryId: suggestion.source_memory_id,
+                        targetMemoryId: suggestion.target_memory_id,
+                      })
+                    }
+                    type="button"
+                  >
+                    合并这组记忆
+                  </button>
+                </div>
+              ))}
+            </article>
+          ) : null}
         </div>
       ) : (
         <p>暂无已确认记忆。</p>

@@ -62,6 +62,41 @@ def test_upload_text_file_can_be_indexed_and_searched(client):
     assert search_response.json()[0]["source_title"] == "notes.txt"
 
 
+def test_source_detail_includes_chunk_count(client):
+    source = client.post(
+        "/api/sources",
+        json={"title": "Detail source", "source_type": "note", "content": "Chunk count visible."},
+    ).json()
+    client.post(f"/api/sources/{source['id']}/index")
+
+    response = client.get(f"/api/sources/{source['id']}")
+
+    assert response.status_code == 200
+    detail = response.json()
+    assert detail["id"] == source["id"]
+    assert detail["chunk_count"] >= 1
+
+
+def test_delete_source_removes_it_from_future_search(client):
+    source = client.post(
+        "/api/sources",
+        json={"title": "Delete me", "source_type": "note", "content": "DeleteMarker searchable content."},
+    ).json()
+    client.post(f"/api/sources/{source['id']}/index")
+
+    assert client.get("/api/search", params={"q": "DeleteMarker"}).json()
+    response = client.delete(f"/api/sources/{source['id']}")
+
+    assert response.status_code == 204
+    assert client.get("/api/search", params={"q": "DeleteMarker"}).json() == []
+
+
+def test_delete_missing_source_returns_404(client):
+    response = client.delete("/api/sources/9999")
+
+    assert response.status_code == 404
+
+
 def test_upload_unsupported_file_creates_failed_source(client):
     response = client.post(
         "/api/sources/upload",

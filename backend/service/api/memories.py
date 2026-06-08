@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from service.core.memory import MemoryService
 from service.db import get_db
 from service.repositories.memories import MemoryRepository
-from service.schemas import MemoryCandidateRead, MemoryMerge, MemoryRead, MemoryUpdate
+from service.schemas import MemoryCandidateRead, MemoryDuplicateSuggestionRead, MemoryMerge, MemoryRead, MemoryUpdate
 
 router = APIRouter(prefix="/api/memories", tags=["memories"])
 
@@ -40,6 +40,11 @@ def ignore_candidate(candidate_id: int, db: Session = Depends(get_db)):
 @router.get("", response_model=list[MemoryRead])
 def list_memories(db: Session = Depends(get_db)):
     return MemoryRepository(db).active_memories()
+
+
+@router.get("/duplicate-suggestions", response_model=list[MemoryDuplicateSuggestionRead])
+def duplicate_suggestions(db: Session = Depends(get_db)):
+    return MemoryService(MemoryRepository(db)).duplicate_suggestions()
 
 
 @router.patch("/{memory_id}", response_model=MemoryRead)

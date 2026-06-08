@@ -36,12 +36,19 @@ class SourceRead(BaseModel):
     created_at: datetime
 
 
+class SourceDetailRead(SourceRead):
+    chunk_count: int
+
+
 class ChunkRead(BaseModel):
     id: int
     source_id: int
     source_title: str
     text: str
     score: float
+    matched_terms: list[str] = Field(default_factory=list)
+    matched_date: str | None = None
+    match_reason: str = ""
 
 
 class ChatRequest(BaseModel):
@@ -54,6 +61,9 @@ class CitationRead(BaseModel):
     source_title: str
     chunk_id: int
     quote: str
+    matched_terms: list[str] = Field(default_factory=list)
+    matched_date: str | None = None
+    match_reason: str = ""
 
 
 class UsedMemoryRead(BaseModel):
@@ -106,6 +116,14 @@ class MemoryMerge(BaseModel):
     target_memory_id: int
 
 
+class MemoryDuplicateSuggestionRead(BaseModel):
+    source_memory_id: int
+    target_memory_id: int
+    source_text: str
+    target_text: str
+    overlap_score: float
+
+
 class ReviewRead(BaseModel):
     sources_added: list[SourceRead]
     memories_confirmed: list[MemoryRead]
@@ -121,3 +139,5 @@ class RuntimeSettingsRead(BaseModel):
     llm_configured: bool
     llm_fallback_enabled: bool
     embedding_mode: str
+    configuration_hint: str | None = None
+    latest_fallback_reason: str | None = None

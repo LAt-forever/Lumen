@@ -22,6 +22,8 @@ _CJK_STOP_TERMS = {"一个", "这个", "那个", "什么", "怎么", "如何", "
 class RankedChunk:
     chunk: SourceChunk
     score: float
+    matched_terms: list[str]
+    matched_date: str | None
 
 
 class KnowledgeService:
@@ -60,13 +62,16 @@ class KnowledgeService:
             if query_dates and query_dates.isdisjoint(chunk_dates):
                 continue
             chunk_terms = self._search_terms(searchable_text)
-            keyword_score = sum(1.0 for term in query_terms if term in chunk_terms)
+            matched_terms = sorted(term for term in query_terms if term in chunk_terms)
+            keyword_score = float(len(matched_terms))
             if keyword_score <= 0:
                 continue
             vector_score = cosine(query_vector, loads_embedding(chunk.embedding_json))
-            date_score = 2.0 if query_dates and not query_dates.isdisjoint(chunk_dates) else 0.0
+            matched_dates = sorted(query_dates.intersection(chunk_dates))
+            matched_date = matched_dates[0] if matched_dates else None
+            date_score = 2.0 if matched_date else 0.0
             score = (keyword_score * 2.0) + date_score + vector_score
-            ranked.append(RankedChunk(chunk=chunk, score=score))
+            ranked.append(RankedChunk(chunk=chunk, score=score, matched_terms=matched_terms, matched_date=matched_date))
         ranked.sort(key=lambda item: item.score, reverse=True)
         results: list[ChunkRead] = []
         seen_texts: set[str] = set()
@@ -83,11 +88,22 @@ class KnowledgeService:
                     source_title=item.chunk.source.title,
                     text=focused_text,
                     score=item.score,
+                    matched_terms=item.matched_terms,
+                    matched_date=item.matched_date,
+                    match_reason=self._match_reason(item.matched_terms, item.matched_date),
                 )
             )
             if len(results) >= limit:
                 break
         return results
+
+    def _match_reason(self, matched_terms: list[str], matched_date: str | None) -> str:
+        reasons: list[str] = []
+        if matched_date:
+            reasons.append(f"匹配日期 {matched_date}")
+        if matched_terms:
+            reasons.append(f"匹配关键词：{'、'.join(matched_terms[:6])}")
+        return "；".join(reasons)
 
     def _search_terms(self, text: str) -> set[str]:
         lowered = text.lower()

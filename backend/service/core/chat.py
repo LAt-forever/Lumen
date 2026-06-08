@@ -53,6 +53,9 @@ class ChatOrchestrator:
                     source_title=chunk.source_title,
                     chunk_id=chunk.id,
                     quote=chunk.text[:300],
+                    matched_terms=chunk.matched_terms,
+                    matched_date=chunk.matched_date,
+                    match_reason=chunk.match_reason,
                 )
             )
 
