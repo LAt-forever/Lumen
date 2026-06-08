@@ -26,6 +26,8 @@ body {
 }
 
 button,
+input,
+select,
 textarea {
   font: inherit;
 }
@@ -86,7 +88,8 @@ button {
 }
 
 .nav-item:hover,
-.nav-item:focus-visible {
+.nav-item:focus-visible,
+.nav-item.active {
   background: #edf3ee;
   color: var(--primary-strong);
   outline: none;
@@ -99,6 +102,10 @@ button {
   grid-template-rows: auto minmax(0, 1fr);
   gap: 18px;
   padding: 22px;
+}
+
+.workbench.single-pane {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .top-bar {
@@ -192,6 +199,10 @@ p {
   grid-column: 1 / -1;
 }
 
+.center-column > .full-span {
+  grid-column: 1 / -1;
+}
+
 .panel-header {
   display: flex;
   align-items: start;
@@ -218,10 +229,55 @@ p {
   line-height: 1.5;
 }
 
-.center-panel textarea:focus {
+.center-panel input,
+.center-panel select {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid #cbd6cf;
+  border-radius: 8px;
+  background: var(--surface-soft);
+  color: var(--ink);
+  padding: 9px 12px;
+}
+
+.center-panel textarea:focus,
+.center-panel input:focus,
+.center-panel select:focus {
   border-color: var(--primary);
   box-shadow: 0 0 0 3px rgb(31 111 91 / 0.14);
   outline: none;
+}
+
+.segmented-control {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0 14px;
+}
+
+.segmented-control button {
+  min-height: 34px;
+  border: 1px solid #d4ded8;
+  border-radius: 8px;
+  background: var(--surface-soft);
+  color: var(--primary-strong);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 7px 11px;
+}
+
+.segmented-control button.active,
+.segmented-control button:hover,
+.segmented-control button:focus-visible {
+  border-color: var(--primary);
+  background: #edf5f1;
+  outline: none;
+}
+
+.form-stack {
+  display: grid;
+  gap: 10px;
 }
 
 .action-row {
@@ -291,6 +347,34 @@ p {
 .memory-actions button:disabled {
   cursor: not-allowed;
   opacity: 0.58;
+}
+
+.merge-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.merge-row .field-label {
+  grid-column: 1 / -1;
+  margin-bottom: -2px;
+}
+
+.merge-row button {
+  min-height: 42px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--primary);
+  color: #ffffff;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 10px;
+}
+
+.results-list {
+  margin-top: 16px;
 }
 
 .answer-text {

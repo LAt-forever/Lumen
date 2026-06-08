@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -20,7 +20,66 @@ describe('Lumen workbench', () => {
         const method = init?.method ?? 'GET'
 
         if (url.endsWith('/api/sources') && method === 'GET') {
-          return jsonResponse([])
+          return jsonResponse([
+            {
+              id: 7,
+              title: '已有资料',
+              source_type: 'note',
+              status: 'indexed',
+              url: null,
+              filename: null,
+              error_message: null,
+              created_at: '2026-06-05T00:00:00',
+            },
+          ])
+        }
+        if (url.endsWith('/api/sources/upload') && method === 'POST') {
+          return jsonResponse({
+            id: 8,
+            title: 'phase-1-1.txt',
+            source_type: 'text',
+            status: 'pending',
+            url: null,
+            filename: 'phase-1-1.txt',
+            error_message: null,
+            created_at: '2026-06-05T00:00:00',
+          })
+        }
+        if (url.endsWith('/api/sources/link') && method === 'POST') {
+          return jsonResponse({
+            id: 9,
+            title: 'https://example.com/lumen',
+            source_type: 'link',
+            status: 'pending',
+            url: 'https://example.com/lumen',
+            filename: null,
+            error_message: null,
+            created_at: '2026-06-05T00:00:00',
+          })
+        }
+        if (url.endsWith('/api/sources/8/index') && method === 'POST') {
+          return jsonResponse({
+            id: 8,
+            title: 'phase-1-1.txt',
+            source_type: 'text',
+            status: 'indexed',
+            url: null,
+            filename: 'phase-1-1.txt',
+            error_message: null,
+            created_at: '2026-06-05T00:00:00',
+          })
+        }
+        if (url.endsWith('/api/sources/9/index') && method === 'POST') {
+          return jsonResponse({
+            id: 9,
+            title: 'https://example.com/lumen',
+            source_type: 'link',
+            status: 'indexed',
+            url: 'https://example.com/lumen',
+            filename: null,
+            error_message: null,
+            created_at: '2026-06-05T00:00:00',
+          })
         }
         if (url.endsWith('/api/memories/candidates') && method === 'GET') {
           return jsonResponse([
@@ -42,6 +101,26 @@ describe('Lumen workbench', () => {
               source_ref: '2',
               confidence: 72,
               status: 'pending',
+              created_at: '2026-06-05T00:00:00',
+            },
+          ])
+        }
+        if (url.endsWith('/api/memories') && method === 'GET') {
+          return jsonResponse([
+            {
+              id: 10,
+              text: '用户喜欢引用清楚的回答。',
+              memory_type: 'preference',
+              provenance: 'message:1',
+              status: 'active',
+              created_at: '2026-06-05T00:00:00',
+            },
+            {
+              id: 11,
+              text: 'Lumen 是当前个人知识库项目。',
+              memory_type: 'project',
+              provenance: 'message:2',
+              status: 'active',
               created_at: '2026-06-05T00:00:00',
             },
           ])
@@ -78,12 +157,54 @@ describe('Lumen workbench', () => {
         if (url.endsWith('/api/memories/candidates/2/ignore') && method === 'POST') {
           return jsonResponse({ status: 'ignored' })
         }
+        if (url.endsWith('/api/search?q=link+capture') && method === 'GET') {
+          return jsonResponse([
+            {
+              id: 3,
+              source_id: 9,
+              source_title: 'https://example.com/lumen',
+              text: 'Lumen link capture should be searchable.',
+              score: 4.2,
+            },
+          ])
+        }
+        if (url.endsWith('/api/memories/10') && method === 'PATCH') {
+          return jsonResponse({
+            id: 10,
+            text: '用户偏好带清晰引用的回答。',
+            memory_type: 'preference',
+            provenance: 'message:1',
+            status: 'edited',
+            created_at: '2026-06-05T00:00:00',
+          })
+        }
+        if (url.endsWith('/api/memories/10/forget') && method === 'POST') {
+          return jsonResponse({
+            id: 10,
+            text: '用户偏好带清晰引用的回答。',
+            memory_type: 'preference',
+            provenance: 'message:1',
+            status: 'forgotten',
+            created_at: '2026-06-05T00:00:00',
+          })
+        }
+        if (url.endsWith('/api/memories/11/merge') && method === 'POST') {
+          return jsonResponse({
+            id: 10,
+            text: '用户偏好带清晰引用的回答。 Lumen 是当前个人知识库项目。',
+            memory_type: 'preference',
+            provenance: 'message:1',
+            status: 'edited',
+            created_at: '2026-06-05T00:00:00',
+          })
+        }
         throw new Error(`Unhandled request: ${method} ${url}`)
       }),
     )
   })
 
   afterEach(() => {
+    cleanup()
     vi.unstubAllGlobals()
   })
 
@@ -116,6 +237,63 @@ describe('Lumen workbench', () => {
     )
     expect(fetch).toHaveBeenCalledWith(
       'http://127.0.0.1:8000/api/memories/candidates/2/ignore',
+      expect.objectContaining({ method: 'POST' }),
+    )
+  })
+
+  it('supports Phase 1.1 source, search, and confirmed memory workflows', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(screen.getByRole('button', { name: '资料库' }))
+    await user.click(screen.getByRole('button', { name: '文件' }))
+    const file = new File(['Lumen Phase 1.1 file upload.'], 'phase-1-1.txt', { type: 'text/plain' })
+    await user.upload(screen.getByLabelText('选择资料文件'), file)
+    await user.click(screen.getByRole('button', { name: '上传文件' }))
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:8000/api/sources/upload',
+      expect.objectContaining({ method: 'POST' }),
+    )
+
+    await user.click(screen.getByRole('button', { name: '链接' }))
+    await user.type(screen.getByLabelText('网页链接'), 'https://example.com/lumen')
+    await user.click(screen.getByRole('button', { name: '添加链接' }))
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:8000/api/sources/link',
+      expect.objectContaining({ method: 'POST' }),
+    )
+
+    await user.click(screen.getByRole('button', { name: '搜索' }))
+    await user.type(screen.getByLabelText('搜索资料'), 'link capture')
+    await user.click(screen.getByRole('button', { name: '执行搜索' }))
+
+    expect(await screen.findByText('Lumen link capture should be searchable.')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '记忆' }))
+    expect(await screen.findByText('用户喜欢引用清楚的回答。')).toBeInTheDocument()
+
+    await user.click(screen.getAllByRole('button', { name: '编辑' })[0])
+    await user.clear(screen.getByLabelText('记忆内容'))
+    await user.type(screen.getByLabelText('记忆内容'), '用户偏好带清晰引用的回答。')
+    await user.click(screen.getByRole('button', { name: '保存记忆' }))
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:8000/api/memories/10',
+      expect.objectContaining({ method: 'PATCH' }),
+    )
+
+    await user.click(screen.getAllByRole('button', { name: '遗忘' })[0])
+    expect(fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:8000/api/memories/10/forget',
+      expect.objectContaining({ method: 'POST' }),
+    )
+
+    await user.selectOptions(screen.getByLabelText('合并目标 11'), '10')
+    await user.click(screen.getAllByRole('button', { name: '合并到目标' })[1])
+    expect(fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:8000/api/memories/11/merge',
       expect.objectContaining({ method: 'POST' }),
     )
   })

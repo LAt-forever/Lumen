@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from service.core.memory import MemoryService
 from service.db import get_db
 from service.repositories.memories import MemoryRepository
-from service.schemas import MemoryCandidateRead, MemoryRead, MemoryUpdate
+from service.schemas import MemoryCandidateRead, MemoryMerge, MemoryRead, MemoryUpdate
 
 router = APIRouter(prefix="/api/memories", tags=["memories"])
 
@@ -40,3 +40,30 @@ def ignore_candidate(candidate_id: int, db: Session = Depends(get_db)):
 @router.get("", response_model=list[MemoryRead])
 def list_memories(db: Session = Depends(get_db)):
     return MemoryRepository(db).active_memories()
+
+
+@router.patch("/{memory_id}", response_model=MemoryRead)
+def update_memory(memory_id: int, data: MemoryUpdate, db: Session = Depends(get_db)):
+    service = MemoryService(MemoryRepository(db))
+    try:
+        return service.edit(memory_id, text=data.text, memory_type=data.memory_type)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Memory not found") from exc
+
+
+@router.post("/{memory_id}/forget", response_model=MemoryRead)
+def forget_memory(memory_id: int, db: Session = Depends(get_db)):
+    service = MemoryService(MemoryRepository(db))
+    try:
+        return service.forget(memory_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Memory not found") from exc
+
+
+@router.post("/{memory_id}/merge", response_model=MemoryRead)
+def merge_memory(memory_id: int, data: MemoryMerge, db: Session = Depends(get_db)):
+    service = MemoryService(MemoryRepository(db))
+    try:
+        return service.merge(memory_id, target_memory_id=data.target_memory_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

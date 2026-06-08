@@ -18,6 +18,10 @@ class SourceCreate(BaseModel):
     filename: str | None = None
 
 
+class LinkCapture(BaseModel):
+    url: str = Field(min_length=1, max_length=1000)
+
+
 class SourceRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -93,6 +97,10 @@ class MemoryRead(BaseModel):
 class MemoryUpdate(BaseModel):
     text: str = Field(min_length=1)
     memory_type: MemoryType
+
+
+class MemoryMerge(BaseModel):
+    target_memory_id: int
 
 
 class ReviewRead(BaseModel):

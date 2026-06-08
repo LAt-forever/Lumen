@@ -18,6 +18,14 @@ export type ChatResponse = {
   confidence: string
 }
 
+export type ChunkRead = {
+  id: number
+  source_id: number
+  source_title: string
+  text: string
+  score: number
+}
+
 export type MemoryCandidateRead = {
   id: number
   text: string
@@ -36,6 +44,11 @@ export type MemoryRead = {
   provenance: string
   status: string
   created_at: string
+}
+
+export type MemoryUpdate = {
+  text: string
+  memory_type: string
 }
 
 export type ReviewRead = {

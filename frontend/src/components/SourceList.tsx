@@ -1,8 +1,9 @@
-import { useSources } from '../api/hooks'
+import { useIndexSource, useSources } from '../api/hooks'
 import { formatSourceStatus } from '../i18n'
 
 export function SourceList() {
   const { data: sources = [] } = useSources()
+  const indexSource = useIndexSource()
 
   return (
     <section className="center-panel" aria-label="最近资料">
@@ -16,6 +17,14 @@ export function SourceList() {
             <article className="list-row" key={source.id}>
               <strong>{source.title}</strong>
               <p>{formatSourceStatus(source.status)}</p>
+              {source.error_message ? <p>{source.error_message}</p> : null}
+              {source.status === 'failed' ? (
+                <div className="memory-actions">
+                  <button disabled={indexSource.isPending} onClick={() => indexSource.mutate(source.id)} type="button">
+                    重试索引
+                  </button>
+                </div>
+              ) : null}
             </article>
           ))}
         </div>

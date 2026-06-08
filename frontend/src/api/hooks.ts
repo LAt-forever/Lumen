@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api } from './client'
-import type { ChatResponse, MemoryCandidateRead, ReviewRead, SourceRead } from './types'
+import type { ChatResponse, ChunkRead, MemoryCandidateRead, MemoryRead, MemoryUpdate, ReviewRead, SourceRead } from './types'
 
 export function useSources() {
   return useQuery<SourceRead[]>({ queryKey: ['sources'], queryFn: () => api.listSources() as Promise<SourceRead[]> })
@@ -20,6 +20,43 @@ export function useCreateSource() {
   })
 }
 
+async function indexIfPending(source: SourceRead) {
+  if (source.status === 'pending') {
+    await api.indexSource(source.id)
+  }
+}
+
+function useSourceCaptureMutation<TInput>(mutationFn: (input: TInput) => Promise<SourceRead>) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn,
+    onSuccess: async (source) => {
+      await indexIfPending(source)
+      await queryClient.invalidateQueries({ queryKey: ['sources'] })
+      await queryClient.invalidateQueries({ queryKey: ['review'] })
+    },
+  })
+}
+
+export function useUploadSource() {
+  return useSourceCaptureMutation<File>(api.uploadSource)
+}
+
+export function useCaptureLink() {
+  return useSourceCaptureMutation<string>(api.captureLink)
+}
+
+export function useIndexSource() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: api.indexSource,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['sources'] })
+      await queryClient.invalidateQueries({ queryKey: ['review'] })
+    },
+  })
+}
+
 export function useAskLumen() {
   const queryClient = useQueryClient()
   return useMutation<ChatResponse, Error, string>({
@@ -31,10 +68,25 @@ export function useAskLumen() {
   })
 }
 
+export function useSearch(query: string) {
+  return useQuery<ChunkRead[]>({
+    queryKey: ['search', query],
+    queryFn: () => api.search(query),
+    enabled: query.trim().length > 0,
+  })
+}
+
 export function usePendingMemories() {
   return useQuery<MemoryCandidateRead[]>({
     queryKey: ['memories', 'pending'],
     queryFn: () => api.pendingMemories() as Promise<MemoryCandidateRead[]>,
+  })
+}
+
+export function useMemories() {
+  return useQuery<MemoryRead[]>({
+    queryKey: ['memories', 'active'],
+    queryFn: () => api.listMemories(),
   })
 }
 
@@ -45,6 +97,7 @@ export function useConfirmMemory() {
       api.confirmMemory(candidate.id, { text: candidate.text, memory_type: candidate.memory_type }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['memories', 'pending'] })
+      await queryClient.invalidateQueries({ queryKey: ['memories', 'active'] })
       await queryClient.invalidateQueries({ queryKey: ['review'] })
     },
   })
@@ -56,6 +109,39 @@ export function useIgnoreMemory() {
     mutationFn: (candidateId: number) => api.ignoreMemory(candidateId),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['memories', 'pending'] })
+      await queryClient.invalidateQueries({ queryKey: ['review'] })
+    },
+  })
+}
+
+export function useUpdateMemory() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ memoryId, payload }: { memoryId: number; payload: MemoryUpdate }) => api.updateMemory(memoryId, payload),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['memories', 'active'] })
+      await queryClient.invalidateQueries({ queryKey: ['review'] })
+    },
+  })
+}
+
+export function useForgetMemory() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: api.forgetMemory,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['memories', 'active'] })
+      await queryClient.invalidateQueries({ queryKey: ['review'] })
+    },
+  })
+}
+
+export function useMergeMemory() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ memoryId, targetMemoryId }: { memoryId: number; targetMemoryId: number }) => api.mergeMemory(memoryId, targetMemoryId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['memories', 'active'] })
       await queryClient.invalidateQueries({ queryKey: ['review'] })
     },
   })

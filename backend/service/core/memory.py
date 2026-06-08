@@ -37,6 +37,15 @@ class MemoryService:
     def ignore(self, candidate_id: int) -> None:
         self.memories.ignore(candidate_id)
 
+    def edit(self, memory_id: int, text: str, memory_type: str) -> Memory:
+        return self.memories.update(memory_id, text=text, memory_type=memory_type)
+
+    def forget(self, memory_id: int) -> Memory:
+        return self.memories.forget(memory_id)
+
+    def merge(self, memory_id: int, target_memory_id: int) -> Memory:
+        return self.memories.merge(memory_id, target_memory_id=target_memory_id)
+
     def search(self, query: str, limit: int = 5) -> list[Memory]:
         terms = self._search_terms(query)
         if not terms:
