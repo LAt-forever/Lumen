@@ -35,6 +35,24 @@ def make_orchestrator():
     return db, sources, knowledge, memories, ChatOrchestrator(conversations, knowledge, memories)
 
 
+@pytest.fixture()
+def stale_llm_settings_cache(monkeypatch):
+    from service.config import get_settings
+
+    monkeypatch.setenv("LUMEN_LLM_MODE", "llm")
+    monkeypatch.setenv("LUMEN_LLM_MODEL", "gpt-ambient")
+    monkeypatch.setenv("LUMEN_LLM_API_KEY", "ambient-key")
+    get_settings.cache_clear()
+    get_settings()
+    yield
+    get_settings.cache_clear()
+
+
+@pytest.fixture()
+def client_with_stale_llm_settings(stale_llm_settings_cache, client):
+    return client
+
+
 def test_chat_answer_includes_citation():
     db, sources, knowledge, _memories, chat = make_orchestrator()
     source = sources.create(SourceCreate(title="Lumen Principles", source_type="note", content="Lumen answers should show clear citations."))
@@ -432,6 +450,32 @@ class FakeHttpxResponse:
         return self.payload
 
 
+def test_client_fixture_defaults_chat_api_to_extractive(client_with_stale_llm_settings, monkeypatch):
+    def fail_http_post(*_args, **_kwargs):
+        raise AssertionError("shared client fixture should clear stale LLM configuration")
+
+    monkeypatch.setattr("service.core.llm.httpx.post", fail_http_post)
+    created = client_with_stale_llm_settings.post(
+        "/api/sources",
+        json={
+            "title": "Ambient Config Evidence",
+            "source_type": "note",
+            "content": "Ambient LLM settings should be ignored.",
+        },
+    )
+    assert created.status_code == 200
+    source_id = created.json()["id"]
+    indexed = client_with_stale_llm_settings.post(f"/api/sources/{source_id}/index")
+    assert indexed.status_code == 200
+
+    response = client_with_stale_llm_settings.post("/api/chat", json={"message": "What should happen?"})
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["answer_mode"] == "extractive"
+    assert data["fallback_reason"] is None
+
+
 def test_chat_api_reports_missing_llm_config_fallback(client, monkeypatch):
     monkeypatch.setenv("LUMEN_LLM_MODE", "llm")
     monkeypatch.delenv("LUMEN_LLM_MODEL", raising=False)
@@ -440,11 +484,14 @@ def test_chat_api_reports_missing_llm_config_fallback(client, monkeypatch):
 
     get_settings.cache_clear()
     try:
-        client.post(
+        created = client.post(
             "/api/sources",
             json={"title": "API Evidence", "source_type": "note", "content": "API fallback should be visible."},
         )
-        client.post("/api/sources/1/index")
+        assert created.status_code == 200
+        source_id = created.json()["id"]
+        indexed = client.post(f"/api/sources/{source_id}/index")
+        assert indexed.status_code == 200
 
         response = client.post("/api/chat", json={"message": "What should be visible?"})
 
