@@ -1,4 +1,13 @@
+import pytest
+
 from service.config import get_settings
+
+
+@pytest.fixture(autouse=True)
+def clear_settings_cache():
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
 
 
 def test_runtime_settings_omits_api_key(client, monkeypatch):
@@ -7,7 +16,7 @@ def test_runtime_settings_omits_api_key(client, monkeypatch):
     monkeypatch.setenv("LUMEN_LLM_MODEL", "gpt-test")
     monkeypatch.setenv("LUMEN_LLM_API_KEY", "secret-value")
     monkeypatch.setenv("LUMEN_LLM_FALLBACK_ENABLED", "true")
-    get_settings.cache_clear()
+    monkeypatch.setenv("LUMEN_EMBEDDING_MODE", "hash")
 
     response = client.get("/api/settings/runtime")
 
@@ -26,9 +35,11 @@ def test_runtime_settings_omits_api_key(client, monkeypatch):
 
 def test_runtime_settings_defaults_to_extractive(client, monkeypatch):
     monkeypatch.delenv("LUMEN_LLM_MODE", raising=False)
+    monkeypatch.delenv("LUMEN_LLM_PROVIDER", raising=False)
     monkeypatch.delenv("LUMEN_LLM_MODEL", raising=False)
     monkeypatch.delenv("LUMEN_LLM_API_KEY", raising=False)
-    get_settings.cache_clear()
+    monkeypatch.delenv("LUMEN_LLM_FALLBACK_ENABLED", raising=False)
+    monkeypatch.delenv("LUMEN_EMBEDDING_MODE", raising=False)
 
     response = client.get("/api/settings/runtime")
 
@@ -39,3 +50,4 @@ def test_runtime_settings_defaults_to_extractive(client, monkeypatch):
     assert data["llm_model"] is None
     assert data["llm_configured"] is False
     assert data["llm_fallback_enabled"] is True
+    assert data["embedding_mode"] == "hash"
