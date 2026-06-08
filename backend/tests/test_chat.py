@@ -3,6 +3,7 @@ from sqlalchemy.orm import sessionmaker
 
 from service.core.chat import ChatOrchestrator
 from service.core.knowledge import KnowledgeService
+from service.core.llm import OpenAICompatibleAnswerProvider
 from service.core.memory import MemoryService
 from service.db import Base
 from service.repositories.chunks import ChunkRepository
@@ -115,3 +116,76 @@ def test_chat_response_includes_extractive_answer_metadata():
     assert response.confidence == "grounded"
     assert response.answer_mode == "extractive"
     assert response.fallback_reason is None
+
+
+class FakeChatCompletionClient:
+    def __init__(self):
+        self.calls = []
+
+    def complete(self, messages):
+        self.calls.append(messages)
+        return "这是基于资料生成的中文总结。"
+
+
+def test_chat_uses_llm_provider_when_evidence_is_grounded():
+    _db, sources, knowledge, _memories, chat = make_orchestrator()
+    source = sources.create(
+        SourceCreate(title="Lumen Evidence", source_type="note", content="Lumen must answer only from retrieved evidence.")
+    )
+    knowledge.index_source(source.id)
+    fake_client = FakeChatCompletionClient()
+    chat.answer_provider = OpenAICompatibleAnswerProvider(
+        client=fake_client,
+        fallback_provider=chat.answer_provider,
+        fallback_enabled=True,
+    )
+
+    response = chat.ask(ChatRequest(message="How must Lumen answer?"))
+
+    assert response.answer == "这是基于资料生成的中文总结。"
+    assert response.answer_mode == "llm"
+    assert response.confidence == "grounded"
+    assert response.fallback_reason is None
+    assert fake_client.calls
+    assert "retrieved evidence" in fake_client.calls[0][1]["content"]
+
+
+def test_llm_provider_does_not_run_without_evidence():
+    _db, _sources, _knowledge, _memories, chat = make_orchestrator()
+    fake_client = FakeChatCompletionClient()
+    chat.answer_provider = OpenAICompatibleAnswerProvider(
+        client=fake_client,
+        fallback_provider=chat.answer_provider,
+        fallback_enabled=True,
+    )
+
+    response = chat.ask(ChatRequest(message="Tell me something unsupported."))
+
+    assert response.confidence == "weak"
+    assert response.answer_mode == "extractive"
+    assert response.fallback_reason == "证据不足，已使用摘录模式。"
+    assert fake_client.calls == []
+
+
+class FailingChatCompletionClient:
+    def complete(self, messages):
+        raise RuntimeError("provider down")
+
+
+def test_llm_provider_falls_back_when_client_fails():
+    _db, sources, knowledge, _memories, chat = make_orchestrator()
+    source = sources.create(
+        SourceCreate(title="Fallback Evidence", source_type="note", content="Fallback should preserve the existing extractive answer.")
+    )
+    knowledge.index_source(source.id)
+    chat.answer_provider = OpenAICompatibleAnswerProvider(
+        client=FailingChatCompletionClient(),
+        fallback_provider=chat.answer_provider,
+        fallback_enabled=True,
+    )
+
+    response = chat.ask(ChatRequest(message="What should fallback preserve?"))
+
+    assert response.answer_mode == "extractive"
+    assert response.fallback_reason == "LLM 请求失败，已使用摘录模式。"
+    assert "Fallback should preserve" in response.answer
