@@ -1,3 +1,4 @@
+import json
 from dataclasses import dataclass, replace
 from typing import Protocol
 from urllib.parse import urljoin
@@ -83,6 +84,11 @@ class ChatCompletionError(RuntimeError):
     pass
 
 
+def _safe_evidence_json(payload: dict[str, str]) -> str:
+    encoded = json.dumps(payload, ensure_ascii=False, indent=2)
+    return encoded.replace("<", "\\u003c").replace(">", "\\u003e")
+
+
 class HttpxChatCompletionClient:
     def __init__(self, base_url: str, model: str, api_key: str, timeout_seconds: float):
         self.base_url = base_url.rstrip("/") + "/"
@@ -157,9 +163,9 @@ class OpenAICompatibleAnswerProvider:
         source_lines = [
             (
                 f"<SOURCE_CHUNK index=\"{index}\" source_id=\"{chunk.source_id}\" "
-                f"chunk_id=\"{chunk.id}\" title=\"{chunk.source_title}\">\n"
+                f"chunk_id=\"{chunk.id}\">\n"
                 "<<<BEGIN_QUOTED_EVIDENCE>>>\n"
-                f"{chunk.text}\n"
+                f"{_safe_evidence_json({'title': chunk.source_title, 'text': chunk.text})}\n"
                 "<<<END_QUOTED_EVIDENCE>>>\n"
                 "</SOURCE_CHUNK>"
             )
@@ -167,9 +173,9 @@ class OpenAICompatibleAnswerProvider:
         ]
         memory_lines = [
             (
-                f"<MEMORY id=\"{memory.id}\" type=\"{memory.memory_type}\">\n"
+                f"<MEMORY id=\"{memory.id}\">\n"
                 "<<<BEGIN_QUOTED_EVIDENCE>>>\n"
-                f"{memory.text}\n"
+                f"{_safe_evidence_json({'memory_type': memory.memory_type, 'text': memory.text})}\n"
                 "<<<END_QUOTED_EVIDENCE>>>\n"
                 "</MEMORY>"
             )
