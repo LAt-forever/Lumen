@@ -430,3 +430,27 @@ class FakeHttpxResponse:
         if self.failure_kind == "json":
             raise ValueError("invalid json")
         return self.payload
+
+
+def test_chat_api_reports_missing_llm_config_fallback(client, monkeypatch):
+    monkeypatch.setenv("LUMEN_LLM_MODE", "llm")
+    monkeypatch.delenv("LUMEN_LLM_MODEL", raising=False)
+    monkeypatch.delenv("LUMEN_LLM_API_KEY", raising=False)
+    from service.config import get_settings
+
+    get_settings.cache_clear()
+    try:
+        client.post(
+            "/api/sources",
+            json={"title": "API Evidence", "source_type": "note", "content": "API fallback should be visible."},
+        )
+        client.post("/api/sources/1/index")
+
+        response = client.post("/api/chat", json={"message": "What should be visible?"})
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["answer_mode"] == "extractive"
+        assert data["fallback_reason"] == "LLM 未配置，已使用摘录模式。"
+    finally:
+        get_settings.cache_clear()
