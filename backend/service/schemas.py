@@ -8,6 +8,7 @@ SourceType = Literal["note", "markdown", "text", "pdf", "link"]
 MemoryCandidateStatus = Literal["pending", "confirmed", "ignored", "merged"]
 MemoryStatus = Literal["active", "edited", "forgotten", "merged"]
 MemoryType = Literal["preference", "fact", "project", "relationship", "goal", "event", "note"]
+AnswerMode = Literal["extractive", "llm"]
 
 
 class SourceCreate(BaseModel):
@@ -109,3 +110,12 @@ class ReviewRead(BaseModel):
     pending_memories: list[MemoryCandidateRead]
     recent_questions: list[str]
     suggested_actions: list[str]
+
+
+class RuntimeSettingsRead(BaseModel):
+    llm_mode: str
+    llm_provider: str
+    llm_model: str | None
+    llm_configured: bool
+    llm_fallback_enabled: bool
+    embedding_mode: str
