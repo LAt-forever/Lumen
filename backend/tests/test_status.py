@@ -23,17 +23,19 @@ def test_status_summary_reports_runtime_sources_and_pending_tag_suggestions(clie
 
 
 def test_source_retry_reindexes_failed_source_without_deleting_history(client, monkeypatch):
-    import service.api.sources as sources_api
+    from service.core.parsers.web_parser import WebParser
 
     calls = {"count": 0}
 
-    def fake_fetch(_url: str) -> str:
+    async def fake_parse_link(self, raw, **kwargs):
+        from service.core.parsers.base import ParseResult
+
         calls["count"] += 1
         if calls["count"] == 1:
             raise RuntimeError("temporary link failure")
-        return "<html><main>RetryMarker 链接重试后可以索引。</main></html>"
+        return ParseResult(content="RetryMarker 链接重试后可以索引。")
 
-    monkeypatch.setattr(sources_api, "_fetch_url_html", fake_fetch, raising=False)
+    monkeypatch.setattr(WebParser, "_parse_link", fake_parse_link)
     failed = client.post("/api/sources/link", json={"url": "https://example.com/retry"}).json()
     assert failed["status"] == "failed"
 

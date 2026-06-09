@@ -1,12 +1,11 @@
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
-import httpx
 from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile
 from sqlalchemy.orm import Session
 
 from service.core.knowledge import KnowledgeService
-from service.core.parsing import parse_html, parse_pdf
+from service.core.parsers import get_parser
 from service.db import get_db
 from service.repositories.chunks import ChunkRepository
 from service.repositories.sources import SourceRepository
@@ -16,12 +15,6 @@ router = APIRouter(prefix="/api/sources", tags=["sources"])
 
 
 _TEXT_SUFFIXES = {".txt": "text", ".md": "markdown"}
-
-
-def _fetch_url_html(url: str) -> str:
-    response = httpx.get(url, follow_redirects=True, timeout=12)
-    response.raise_for_status()
-    return response.text
 
 
 def _source_type_for_filename(filename: str) -> str:
@@ -78,7 +71,9 @@ async def upload_source(file: UploadFile = File(...), db: Session = Depends(get_
             with NamedTemporaryFile(suffix=".pdf") as tmp:
                 tmp.write(data)
                 tmp.flush()
-                content = parse_pdf(tmp.name).strip()
+                parser = get_parser("pdf")
+                result = await parser.parse(tmp.name)
+                content = result.content.strip()
         else:
             return _failed_source(
                 sources,
@@ -102,11 +97,12 @@ async def upload_source(file: UploadFile = File(...), db: Session = Depends(get_
 
 
 @router.post("/link", response_model=SourceRead)
-def capture_link(data: LinkCapture, db: Session = Depends(get_db)):
+async def capture_link(data: LinkCapture, db: Session = Depends(get_db)):
     sources = SourceRepository(db)
     try:
-        html = _fetch_url_html(data.url)
-        content = parse_html(html).strip()
+        parser = get_parser("link")
+        result = await parser.parse(data.url)
+        content = result.content.strip()
         if not content:
             raise ValueError("No text content found")
     except Exception as exc:
@@ -115,7 +111,13 @@ def capture_link(data: LinkCapture, db: Session = Depends(get_db)):
             SourceCreate(title=data.url, source_type="link", url=data.url),
             str(exc),
         )
-    return sources.create(SourceCreate(title=data.url, source_type="link", url=data.url, content=content))
+    source = sources.create(SourceCreate(title=data.url, source_type="link", url=data.url, content=content))
+    knowledge = KnowledgeService(sources, ChunkRepository(db))
+    knowledge.index_source(source.id)
+    refreshed = sources.get(source.id)
+    if refreshed is None:
+        raise HTTPException(status_code=404, detail="Source not found")
+    return refreshed
 
 
 @router.get("", response_model=list[SourceRead])
@@ -146,25 +148,31 @@ def index_source(source_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{source_id}/retry", response_model=SourceDetailRead)
-def retry_source(source_id: int, db: Session = Depends(get_db)):
+async def retry_source(source_id: int, db: Session = Depends(get_db)):
     sources = SourceRepository(db)
     source = sources.get(source_id)
     if source is None:
         raise HTTPException(status_code=404, detail="Source not found")
-    if source.source_type == "link" and source.url:
-        try:
-            html = _fetch_url_html(source.url)
-            content = parse_html(html).strip()
-            if not content:
-                raise ValueError("No text content found")
-        except Exception as exc:
-            sources.mark_failed(source.id, str(exc))
-            refreshed = sources.get(source.id)
-            if refreshed is None:
-                raise HTTPException(status_code=404, detail="Source not found")
-            return _source_detail(refreshed, db)
-        sources.update_content(source.id, content)
 
+    parser = get_parser(source.source_type)
+    try:
+        if source.source_type == "link" and source.url:
+            result = await parser.parse(source.url)
+        elif source.source_type == "pdf" and source.filename:
+            result = await parser.parse(source.content or "")
+        else:
+            result = await parser.parse(source.content or "")
+        content = result.content.strip()
+        if not content:
+            raise ValueError("No text content found")
+    except Exception as exc:
+        sources.mark_failed(source.id, str(exc))
+        refreshed = sources.get(source.id)
+        if refreshed is None:
+            raise HTTPException(status_code=404, detail="Source not found")
+        return _source_detail(refreshed, db)
+
+    sources.update_content(source.id, content)
     knowledge = KnowledgeService(sources, ChunkRepository(db))
     knowledge.index_source(source_id)
     refreshed = sources.get(source_id)

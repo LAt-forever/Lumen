@@ -111,14 +111,17 @@ def test_upload_unsupported_file_creates_failed_source(client):
 
 
 def test_capture_link_extracts_html_text(client, monkeypatch):
-    import service.api.sources as sources_api
+    from service.core.parsers.web_parser import WebParser
 
-    monkeypatch.setattr(
-        sources_api,
-        "_fetch_url_html",
-        lambda url: "<html><head><title>Lumen Link</title></head><body><script>ignored()</script><main>Lumen link capture should be searchable.</main></body></html>",
-        raising=False,
-    )
+    async def fake_parse_link(self, raw, **kwargs):
+        from service.core.parsers.base import ParseResult
+
+        return ParseResult(
+            content="Lumen link capture should be searchable.",
+            title="Lumen Link",
+        )
+
+    monkeypatch.setattr(WebParser, "_parse_link", fake_parse_link)
 
     response = client.post("/api/sources/link", json={"url": "https://example.com/lumen"})
 
@@ -126,20 +129,19 @@ def test_capture_link_extracts_html_text(client, monkeypatch):
     source = response.json()
     assert source["title"] == "https://example.com/lumen"
     assert source["source_type"] == "link"
-    assert source["status"] == "pending"
+    assert source["status"] == "indexed"
 
-    client.post(f"/api/sources/{source['id']}/index")
     search_response = client.get("/api/search", params={"q": "link capture searchable"})
     assert search_response.json()[0]["source_title"] == "https://example.com/lumen"
 
 
 def test_capture_link_fetch_failure_creates_failed_source(client, monkeypatch):
-    import service.api.sources as sources_api
+    from service.core.parsers.web_parser import WebParser
 
-    def fail_fetch(_url: str) -> str:
+    async def fail_parse_link(self, raw, **kwargs):
         raise RuntimeError("Could not fetch URL")
 
-    monkeypatch.setattr(sources_api, "_fetch_url_html", fail_fetch, raising=False)
+    monkeypatch.setattr(WebParser, "_parse_link", fail_parse_link)
 
     response = client.post("/api/sources/link", json={"url": "https://example.invalid"})
 
