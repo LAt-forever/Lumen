@@ -679,3 +679,59 @@ p {
     margin-top: 0;
   }
 }
+
+.memory-graph {
+  width: 100%;
+  height: 420px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.memory-graph-edge {
+  stroke: #8aa89c;
+  stroke-width: 2;
+}
+
+.memory-graph-edge.merged_into {
+  stroke: #b65f2b;
+  stroke-dasharray: 4 2;
+}
+
+.memory-graph-edge.contradicts {
+  stroke: #c14b4b;
+}
+
+.memory-graph-tooltip-bg {
+  fill: #1d2522;
+  opacity: 0.9;
+}
+
+.memory-graph-tooltip-text {
+  fill: #ffffff;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.memory-graph-node-circle {
+  fill: #ffffff;
+  stroke: var(--primary);
+  stroke-width: 2;
+}
+
+.memory-graph-node-circle.center {
+  fill: var(--primary);
+  stroke: var(--primary-strong);
+  stroke-width: 3;
+}
+
+.memory-graph-node-label {
+  fill: var(--ink);
+  font-size: 12px;
+  font-weight: 650;
+  pointer-events: none;
+}
+
+.memory-graph-node:hover .memory-graph-node-circle {
+  stroke: var(--focus);
+}
