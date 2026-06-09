@@ -186,3 +186,48 @@ export type ReviewRead = {
   recent_questions: string[]
   suggested_actions: string[]
 }
+
+export type RelationType = 'related_to' | 'part_of' | 'caused_by' | 'supports' | 'contradicts' | 'merged_into'
+
+export type RelationStatus = 'active' | 'forgotten'
+
+export type MemoryRelationRead = {
+  id: number
+  source_memory_id: number
+  target_memory_id: number
+  relation_type: RelationType
+  provenance: string
+  strength: number
+  status: RelationStatus
+  created_at: string
+}
+
+export type MemoryRelationCreate = {
+  target_memory_id: number
+  relation_type: RelationType
+  provenance?: string
+  strength?: number
+}
+
+export type MemoryGraphNode = {
+  id: number
+  text: string
+  memory_type: string
+  status: string
+}
+
+export type MemoryGraphEdge = {
+  id: number
+  source_memory_id: number
+  target_memory_id: number
+  relation_type: RelationType
+  provenance: string
+  strength: number
+  status: RelationStatus
+}
+
+export type MemoryGraphRead = {
+  center_memory_id: number
+  nodes: MemoryGraphNode[]
+  edges: MemoryGraphEdge[]
+}

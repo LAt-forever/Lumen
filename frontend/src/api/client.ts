@@ -8,7 +8,10 @@ import type {
   LLMProviderProfileUpdate,
   MemoryCandidateRead,
   MemoryDuplicateSuggestionRead,
+  MemoryGraphRead,
   MemoryRead,
+  MemoryRelationCreate,
+  MemoryRelationRead,
   MemoryUpdate,
   ReviewRead,
   RuntimeSettingsRead,
@@ -186,4 +189,24 @@ export const api = {
     request<LLMProviderProfileRead>(`/api/settings/provider-profiles/${profileId}/test`, { method: 'POST' }),
   deleteProviderProfile: (profileId: number) =>
     request<void>(`/api/settings/provider-profiles/${profileId}`, { method: 'DELETE' }),
+
+  listMemoryRelations: (memoryId: number) =>
+    request<MemoryRelationRead[]>(`/api/memories/${memoryId}/relations`),
+
+  createMemoryRelation: (memoryId: number, payload: MemoryRelationCreate) =>
+    request<MemoryRelationRead>(`/api/memories/${memoryId}/relations`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  forgetMemoryRelation: (memoryId: number, relationId: number) =>
+    request<MemoryRelationRead>(`/api/memories/${memoryId}/relations/${relationId}/forget`, { method: 'POST' }),
+
+  memoryGraph: (memoryId: number, depth = 2) =>
+    request<MemoryGraphRead>(`/api/memories/${memoryId}/graph?depth=${depth}`),
+
+  promoteDuplicateToRelation: (sourceMemoryId: number, targetMemoryId: number) =>
+    request<MemoryRelationRead>(`/api/memories/duplicate-suggestions/${sourceMemoryId}/${targetMemoryId}/relate`, {
+      method: 'POST',
+    }),
 }

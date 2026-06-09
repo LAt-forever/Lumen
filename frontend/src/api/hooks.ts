@@ -11,7 +11,10 @@ import type {
   LLMProviderProfileUpdate,
   MemoryCandidateRead,
   MemoryDuplicateSuggestionRead,
+  MemoryGraphRead,
   MemoryRead,
+  MemoryRelationCreate,
+  MemoryRelationRead,
   MemoryUpdate,
   ReviewRead,
   RuntimeSettingsRead,
@@ -339,4 +342,56 @@ export function useTestProviderProfile() {
 
 export function useDeleteProviderProfile() {
   return useProviderProfileMutation<number>(api.deleteProviderProfile)
+}
+
+export function useMemoryRelations(memoryId?: number) {
+  return useQuery<MemoryRelationRead[]>({
+    queryKey: ['memory-relations', memoryId],
+    queryFn: () => api.listMemoryRelations(memoryId as number),
+    enabled: typeof memoryId === 'number',
+  })
+}
+
+export function useCreateMemoryRelation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ memoryId, payload }: { memoryId: number; payload: MemoryRelationCreate }) =>
+      api.createMemoryRelation(memoryId, payload),
+    onSuccess: async (_, variables) => {
+      await queryClient.invalidateQueries({ queryKey: ['memory-relations', variables.memoryId] })
+      await queryClient.invalidateQueries({ queryKey: ['memory-graph'] })
+    },
+  })
+}
+
+export function useForgetMemoryRelation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ memoryId, relationId }: { memoryId: number; relationId: number }) =>
+      api.forgetMemoryRelation(memoryId, relationId),
+    onSuccess: async (_, variables) => {
+      await queryClient.invalidateQueries({ queryKey: ['memory-relations', variables.memoryId] })
+      await queryClient.invalidateQueries({ queryKey: ['memory-graph'] })
+    },
+  })
+}
+
+export function useMemoryGraph(memoryId?: number, depth = 2) {
+  return useQuery<MemoryGraphRead>({
+    queryKey: ['memory-graph', memoryId, depth],
+    queryFn: () => api.memoryGraph(memoryId as number, depth),
+    enabled: typeof memoryId === 'number',
+  })
+}
+
+export function usePromoteDuplicateToRelation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ sourceMemoryId, targetMemoryId }: { sourceMemoryId: number; targetMemoryId: number }) =>
+      api.promoteDuplicateToRelation(sourceMemoryId, targetMemoryId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['memories', 'duplicates'] })
+      await queryClient.invalidateQueries({ queryKey: ['memory-graph'] })
+    },
+  })
 }
