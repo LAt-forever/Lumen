@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { BookOpen, Brain, Home, MessageSquare, Search, Settings, Sparkles } from 'lucide-react'
+import { Activity, BookOpen, Brain, Home, MessageSquare, Search, Settings, Sparkles } from 'lucide-react'
 
 import { AppShell } from './components/AppShell'
 import type { NavItem } from './components/AppShell'
@@ -13,6 +13,7 @@ const navItems: NavItem[] = [
   { label: '记忆', icon: Brain, view: 'memory' },
   { label: '搜索', icon: Search, view: 'search' },
   { label: '回顾', icon: Sparkles, view: 'review' },
+  { label: '状态', icon: Activity, view: 'status' },
   { label: '设置', icon: Settings, view: 'settings' },
 ]
 

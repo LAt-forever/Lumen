@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useDuplicateMemorySuggestions, useForgetMemory, useMemories, useMergeMemory, useUpdateMemory } from '../api/hooks'
 import type { MemoryRead } from '../api/types'
 import { formatMemoryType } from '../i18n'
+import { OrganizationControls } from './OrganizationControls'
 
 const memoryTypes = ['preference', 'fact', 'project', 'relationship', 'goal', 'event', 'note']
 
@@ -89,6 +90,7 @@ export function MemoryManager() {
                     <strong>{formatMemoryType(memory.memory_type)}</strong>
                     <p>{memory.text}</p>
                     <p>来源：{memory.provenance}</p>
+                    <OrganizationControls targetType="memory" targetId={memory.id} label="记忆" />
                     <div className="memory-actions">
                       <button disabled={isBusy} onClick={() => startEdit(memory)} type="button">
                         编辑

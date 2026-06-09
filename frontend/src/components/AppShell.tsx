@@ -12,8 +12,9 @@ import { ReviewPanel } from './ReviewPanel'
 import { SearchPanel } from './SearchPanel'
 import { SettingsPanel } from './SettingsPanel'
 import { SourceList } from './SourceList'
+import { StatusPanel } from './StatusPanel'
 
-export type ViewKey = 'today' | 'ask' | 'library' | 'memory' | 'search' | 'review' | 'settings'
+export type ViewKey = 'today' | 'ask' | 'library' | 'memory' | 'search' | 'review' | 'status' | 'settings'
 
 export type NavItem = {
   label: string
@@ -95,6 +96,9 @@ export function AppShell({ navItems }: AppShellProps) {
     }
     if (activeView === 'review') {
       return <ReviewPanel />
+    }
+    if (activeView === 'status') {
+      return <StatusPanel />
     }
     return <SettingsPanel />
   }

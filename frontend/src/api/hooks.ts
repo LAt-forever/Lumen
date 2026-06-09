@@ -4,6 +4,8 @@ import { api } from './client'
 import type {
   ChatResponse,
   ChunkRead,
+  FavoriteRead,
+  GlobalSearchResultRead,
   LLMProviderProfileCreate,
   LLMProviderProfileRead,
   LLMProviderProfileUpdate,
@@ -15,6 +17,11 @@ import type {
   RuntimeSettingsRead,
   SourceDetailRead,
   SourceRead,
+  StatusSummaryRead,
+  TagAssignmentRead,
+  TagRead,
+  TagSuggestionRead,
+  TargetType,
 } from './types'
 
 export function useSources() {
@@ -79,6 +86,19 @@ export function useIndexSource() {
   })
 }
 
+export function useRetrySource() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: api.retrySource,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['sources'] })
+      await queryClient.invalidateQueries({ queryKey: ['source'] })
+      await queryClient.invalidateQueries({ queryKey: ['global-search'] })
+      await queryClient.invalidateQueries({ queryKey: ['status'] })
+    },
+  })
+}
+
 export function useDeleteSource() {
   const queryClient = useQueryClient()
   return useMutation({
@@ -118,6 +138,21 @@ export function useSearch(query: string) {
     queryKey: ['search', query],
     queryFn: () => api.search(query),
     enabled: query.trim().length > 0,
+  })
+}
+
+export function useGlobalSearch(params: { query: string; type: string; tag: string; favorite: boolean }) {
+  const types = params.type === 'all' ? undefined : params.type === 'source' ? 'source,source_chunk' : params.type
+  return useQuery<GlobalSearchResultRead[]>({
+    queryKey: ['global-search', params],
+    queryFn: () =>
+      api.globalSearch({
+        q: params.query,
+        types,
+        tag: params.tag || undefined,
+        favorite: params.favorite,
+      }),
+    enabled: params.query.trim().length > 0,
   })
 }
 
@@ -201,6 +236,62 @@ export function useDuplicateMemorySuggestions() {
 
 export function useReview() {
   return useQuery<ReviewRead>({ queryKey: ['review'], queryFn: () => api.review() as Promise<ReviewRead> })
+}
+
+export function useTags() {
+  return useQuery<TagRead[]>({ queryKey: ['tags'], queryFn: () => api.listTags() })
+}
+
+export function useTagSuggestions() {
+  return useQuery<TagSuggestionRead[]>({ queryKey: ['tag-suggestions'], queryFn: () => api.listTagSuggestions() })
+}
+
+function useOrganizationMutation<TInput, TResult>(mutationFn: (input: TInput) => Promise<TResult>) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['tags'] })
+      await queryClient.invalidateQueries({ queryKey: ['tag-suggestions'] })
+      await queryClient.invalidateQueries({ queryKey: ['favorites'] })
+      await queryClient.invalidateQueries({ queryKey: ['global-search'] })
+      await queryClient.invalidateQueries({ queryKey: ['status'] })
+    },
+  })
+}
+
+export function useCreateTag() {
+  return useOrganizationMutation<{ name: string; color?: string | null }, TagRead>(api.createTag)
+}
+
+export function useAssignTag() {
+  return useOrganizationMutation<{ tag_id: number; target_type: TargetType; target_id: number }, TagAssignmentRead>(api.assignTag)
+}
+
+export function useConfirmTagSuggestion() {
+  return useOrganizationMutation<number, TagAssignmentRead>(api.confirmTagSuggestion)
+}
+
+export function useIgnoreTagSuggestion() {
+  return useOrganizationMutation<number, TagSuggestionRead>(api.ignoreTagSuggestion)
+}
+
+export function useFavorites() {
+  return useQuery<FavoriteRead[]>({ queryKey: ['favorites'], queryFn: () => api.listFavorites() })
+}
+
+export function useFavoriteTarget() {
+  return useOrganizationMutation<{ target_type: TargetType; target_id: number }, FavoriteRead>(api.favorite)
+}
+
+export function useUnfavoriteTarget() {
+  return useOrganizationMutation<{ target_type: TargetType; target_id: number }, void>(({ target_type, target_id }) =>
+    api.unfavorite(target_type, target_id),
+  )
+}
+
+export function useStatusSummary() {
+  return useQuery<StatusSummaryRead>({ queryKey: ['status'], queryFn: () => api.status() })
 }
 
 export function useRuntimeSettings() {

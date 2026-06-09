@@ -1,5 +1,6 @@
 import type { ChatResponse } from '../api/types'
 import { formatConfidence } from '../i18n'
+import { OrganizationControls } from './OrganizationControls'
 
 type ChatPanelProps = {
   isStreaming?: boolean
@@ -29,6 +30,7 @@ export function ChatPanel({ isStreaming = false, response, streamingAnswer = '' 
           <p>
             回答模式：<strong>{answerModeLabel}</strong>
           </p>
+          <OrganizationControls targetType="message" targetId={response.message_id} label="回答" />
         </div>
       ) : (
         <p>向 Lumen 提问，开始一段对话。</p>

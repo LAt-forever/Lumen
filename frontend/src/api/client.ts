@@ -1,6 +1,8 @@
 import type {
   ChatResponse,
   ChunkRead,
+  FavoriteRead,
+  GlobalSearchResultRead,
   LLMProviderProfileCreate,
   LLMProviderProfileRead,
   LLMProviderProfileUpdate,
@@ -12,6 +14,11 @@ import type {
   RuntimeSettingsRead,
   SourceDetailRead,
   SourceRead,
+  StatusSummaryRead,
+  TagAssignmentRead,
+  TagRead,
+  TagSuggestionRead,
+  TargetType,
 } from './types'
 
 const viteEnv = (import.meta as ImportMeta & { env?: { VITE_API_BASE?: string } }).env
@@ -25,6 +32,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const isFormData = init?.body instanceof FormData
   const response = await fetch(`${API_BASE}${path}`, {
     headers: isFormData ? init?.headers : { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
+    method: init?.method ?? 'GET',
     ...init,
   })
   if (!response.ok) {
@@ -103,8 +111,16 @@ export const api = {
   captureLink: (url: string) =>
     request<SourceRead>('/api/sources/link', { method: 'POST', body: JSON.stringify({ url }) }),
   indexSource: (sourceId: number) => request<SourceRead>(`/api/sources/${sourceId}/index`, { method: 'POST' }),
+  retrySource: (sourceId: number) => request<SourceDetailRead>(`/api/sources/${sourceId}/retry`, { method: 'POST' }),
   deleteSource: (sourceId: number) => request<void>(`/api/sources/${sourceId}`, { method: 'DELETE' }),
   search: (query: string) => request<ChunkRead[]>(`/api/search?${new URLSearchParams({ q: query }).toString()}`),
+  globalSearch: (params: { q: string; types?: string; tag?: string; favorite?: boolean }) => {
+    const search = new URLSearchParams({ q: params.q })
+    if (params.types) search.set('types', params.types)
+    if (params.tag) search.set('tag', params.tag)
+    if (params.favorite) search.set('favorite', 'true')
+    return request<GlobalSearchResultRead[]>(`/api/global-search?${search.toString()}`)
+  },
   ask: (message: string, conversationId?: number) =>
     request<ChatResponse>('/api/chat', {
       method: 'POST',
@@ -134,7 +150,25 @@ export const api = {
     request<MemoryRead>(`/api/memories/${memoryId}/merge`, { method: 'POST', body: JSON.stringify({ target_memory_id: targetMemoryId }) }),
   duplicateMemorySuggestions: () => request<MemoryDuplicateSuggestionRead[]>('/api/memories/duplicate-suggestions'),
   review: () => request<ReviewRead>('/api/review'),
+  listTags: () => request<TagRead[]>('/api/tags'),
+  createTag: (payload: { name: string; color?: string | null }) =>
+    request<TagRead>('/api/tags', { method: 'POST', body: JSON.stringify(payload) }),
+  assignTag: (payload: { tag_id: number; target_type: TargetType; target_id: number }) =>
+    request<TagAssignmentRead>('/api/tags/assignments', { method: 'POST', body: JSON.stringify(payload) }),
+  deleteTagAssignment: (assignmentId: number) =>
+    request<void>(`/api/tags/assignments/${assignmentId}`, { method: 'DELETE' }),
+  listTagSuggestions: () => request<TagSuggestionRead[]>('/api/tag-suggestions'),
+  confirmTagSuggestion: (suggestionId: number) =>
+    request<TagAssignmentRead>(`/api/tag-suggestions/${suggestionId}/confirm`, { method: 'POST' }),
+  ignoreTagSuggestion: (suggestionId: number) =>
+    request<TagSuggestionRead>(`/api/tag-suggestions/${suggestionId}/ignore`, { method: 'POST' }),
+  listFavorites: () => request<FavoriteRead[]>('/api/favorites'),
+  favorite: (payload: { target_type: TargetType; target_id: number }) =>
+    request<FavoriteRead>('/api/favorites', { method: 'POST', body: JSON.stringify(payload) }),
+  unfavorite: (targetType: TargetType, targetId: number) =>
+    request<void>(`/api/favorites/${targetType}/${targetId}`, { method: 'DELETE' }),
   runtimeSettings: () => request<RuntimeSettingsRead>('/api/settings/runtime'),
+  status: () => request<StatusSummaryRead>('/api/status'),
   listProviderProfiles: () => request<LLMProviderProfileRead[]>('/api/settings/provider-profiles'),
   createProviderProfile: (payload: LLMProviderProfileCreate) =>
     request<LLMProviderProfileRead>('/api/settings/provider-profiles', {

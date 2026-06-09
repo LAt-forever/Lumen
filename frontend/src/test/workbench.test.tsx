@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -204,6 +204,195 @@ describe('Lumen workbench', () => {
               updated_at: '2026-06-05T00:00:00',
             },
           ])
+        }
+        if (url.endsWith('/api/tags') && method === 'GET') {
+          return jsonResponse([
+            {
+              id: 31,
+              name: 'Phase15',
+              color: '#2563eb',
+              created_at: '2026-06-05T00:00:00',
+            },
+          ])
+        }
+        if (url.endsWith('/api/tag-suggestions') && method === 'GET') {
+          return jsonResponse([
+            {
+              id: 41,
+              label: 'Phase15',
+              target_type: 'source',
+              target_id: 7,
+              reason: '从资料「已有资料」中识别到标签线索。',
+              confidence: 72,
+              status: 'pending',
+              created_at: '2026-06-05T00:00:00',
+            },
+            {
+              id: 42,
+              label: '偏好',
+              target_type: 'memory',
+              target_id: 10,
+              reason: '从已确认记忆中识别到标签线索。',
+              confidence: 70,
+              status: 'pending',
+              created_at: '2026-06-05T00:00:00',
+            },
+          ])
+        }
+        if (url.endsWith('/api/tag-suggestions/41/confirm') && method === 'POST') {
+          return jsonResponse({
+            id: 51,
+            tag: { id: 31, name: 'Phase15', color: '#2563eb', created_at: '2026-06-05T00:00:00' },
+            target_type: 'source',
+            target_id: 7,
+            source: 'ai-confirmed',
+            created_at: '2026-06-05T00:00:00',
+          })
+        }
+        if (url.endsWith('/api/tag-suggestions/42/ignore') && method === 'POST') {
+          return jsonResponse({
+            id: 42,
+            label: '偏好',
+            target_type: 'memory',
+            target_id: 10,
+            reason: '从已确认记忆中识别到标签线索。',
+            confidence: 70,
+            status: 'ignored',
+            created_at: '2026-06-05T00:00:00',
+          })
+        }
+        if (url.endsWith('/api/tags/assignments') && method === 'POST') {
+          return jsonResponse({
+            id: 52,
+            tag: { id: 31, name: 'Phase15', color: '#2563eb', created_at: '2026-06-05T00:00:00' },
+            target_type: 'source',
+            target_id: 7,
+            source: 'user',
+            created_at: '2026-06-05T00:00:00',
+          })
+        }
+        if (url.endsWith('/api/favorites') && method === 'GET') {
+          return jsonResponse([])
+        }
+        if (url.endsWith('/api/favorites') && method === 'POST') {
+          return jsonResponse({
+            id: 61,
+            target_type: 'source',
+            target_id: 7,
+            created_at: '2026-06-05T00:00:00',
+          })
+        }
+        if (url.endsWith('/api/favorites/source/7') && method === 'DELETE') {
+          return noContentResponse()
+        }
+        if (url.endsWith('/api/favorites/message/2') && method === 'DELETE') {
+          return noContentResponse()
+        }
+        if (url.includes('/api/global-search') && url.includes('link+capture') && method === 'GET') {
+          return jsonResponse([
+            {
+              result_type: 'source_chunk',
+              target_id: 3,
+              title: 'https://example.com/lumen',
+              snippet: 'Lumen link capture should be searchable.',
+              score: 4.2,
+              matched_terms: ['capture', 'link'],
+              matched_date: null,
+              match_reason: '匹配关键词：capture、link',
+              tags: [],
+              is_favorite: false,
+              created_at: '2026-06-05T00:00:00',
+            },
+          ])
+        }
+        if (url.includes('/api/global-search') && method === 'GET') {
+          return jsonResponse([
+            {
+              result_type: 'source_chunk',
+              target_id: 3,
+              title: '全局搜索资料',
+              snippet: 'Phase15 全局搜索应该返回资料片段。',
+              score: 5.2,
+              matched_terms: ['phase15', '搜索'],
+              matched_date: null,
+              match_reason: '匹配关键词：phase15、搜索',
+              tags: [{ id: 31, name: 'Phase15', color: '#2563eb', created_at: '2026-06-05T00:00:00' }],
+              is_favorite: false,
+              created_at: '2026-06-05T00:00:00',
+            },
+            {
+              result_type: 'memory',
+              target_id: 10,
+              title: '记忆：preference',
+              snippet: '用户喜欢引用清楚的回答。',
+              score: 4.4,
+              matched_terms: ['引用'],
+              matched_date: null,
+              match_reason: '匹配关键词：引用',
+              tags: [],
+              is_favorite: true,
+              created_at: '2026-06-05T00:00:00',
+            },
+            {
+              result_type: 'message',
+              target_id: 2,
+              title: '回答 #2',
+              snippet: '带引用的可信回答。',
+              score: 3.3,
+              matched_terms: ['引用'],
+              matched_date: null,
+              match_reason: '匹配关键词：引用；已收藏',
+              tags: [],
+              is_favorite: true,
+              created_at: '2026-06-05T00:00:00',
+            },
+          ])
+        }
+        if (url.endsWith('/api/status') && method === 'GET') {
+          return jsonResponse({
+            runtime: {
+              llm_mode: 'llm',
+              llm_provider: 'openai-compatible',
+              llm_model: 'gpt-test',
+              llm_configured: true,
+              llm_fallback_enabled: true,
+              embedding_mode: 'hash',
+              configuration_hint: null,
+              latest_fallback_reason: null,
+              runtime_source: 'environment',
+              active_profile_id: null,
+              active_profile_name: null,
+            },
+            source_counts: { total: 2, indexed: 1, failed: 1, pending: 0, parsing: 0 },
+            failed_sources: [
+              {
+                id: 12,
+                title: '失败链接',
+                source_type: 'link',
+                error_message: 'temporary link failure',
+                created_at: '2026-06-05T00:00:00',
+              },
+            ],
+            pending_tag_suggestion_count: 2,
+            latest_fallback_reason: null,
+            suggested_actions: [
+              { label: '重试 1 个失败资料', target_view: 'library', target_id: null },
+              { label: '确认 2 个标签建议', target_view: 'status', target_id: null },
+            ],
+          })
+        }
+        if (url.endsWith('/api/sources/12/retry') && method === 'POST') {
+          return jsonResponse({
+            id: 12,
+            title: '失败链接',
+            source_type: 'link',
+            status: 'indexed',
+            url: 'https://example.com/retry',
+            filename: null,
+            error_message: null,
+            created_at: '2026-06-05T00:00:00',
+            chunk_count: 1,
+          })
         }
         if (url.endsWith('/api/settings/provider-profiles') && method === 'POST') {
           return jsonResponse({
@@ -442,13 +631,13 @@ describe('Lumen workbench', () => {
     )
 
     await user.click(screen.getByRole('button', { name: '搜索' }))
-    await user.type(screen.getByLabelText('搜索资料'), 'link capture')
+    await user.type(screen.getByLabelText('全局搜索'), 'link capture')
     await user.click(screen.getByRole('button', { name: '执行搜索' }))
 
     expect(await screen.findByText('Lumen link capture should be searchable.')).toBeInTheDocument()
     expect(screen.getByText('匹配关键词：capture、link')).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: '记忆' }))
+    await user.click(within(screen.getByRole('navigation', { name: '主导航' })).getByRole('button', { name: '记忆' }))
     expect(await screen.findByText('用户喜欢引用清楚的回答。')).toBeInTheDocument()
     expect(screen.getByText('来源：message:1')).toBeInTheDocument()
     expect(await screen.findByText('可能重复记忆')).toBeInTheDocument()
@@ -533,6 +722,79 @@ describe('Lumen workbench', () => {
     expect(await screen.findByText('带引用的可信回答。')).toBeInTheDocument()
     expect(fetch).toHaveBeenCalledWith(
       'http://127.0.0.1:8000/api/chat/stream',
+      expect.objectContaining({ method: 'POST' }),
+    )
+  })
+
+  it('supports Phase 1.5 global search filters and quality signals', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(screen.getByRole('button', { name: '搜索' }))
+    await user.type(screen.getByLabelText('全局搜索'), 'Phase15 搜索')
+    await user.click(screen.getByRole('button', { name: '执行搜索' }))
+
+    expect(await screen.findByText('Phase15 全局搜索应该返回资料片段。')).toBeInTheDocument()
+    expect(screen.getByText('记忆：preference')).toBeInTheDocument()
+    expect(screen.getByText('回答 #2')).toBeInTheDocument()
+    expect(screen.getByText('匹配关键词：phase15、搜索')).toBeInTheDocument()
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/global-search?'),
+      expect.objectContaining({ method: 'GET' }),
+    )
+
+    await user.click(screen.getByLabelText('只看收藏'))
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining('favorite=true'),
+      expect.objectContaining({ method: 'GET' }),
+    )
+  })
+
+  it('shows organization controls on sources memories and answers', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(screen.getByRole('button', { name: '资料库' }))
+    expect(await screen.findByText('建议：Phase15')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '收藏资料' }))
+    await user.click(screen.getByRole('button', { name: '确认 Phase15' }))
+    expect(fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:8000/api/favorites',
+      expect.objectContaining({ method: 'POST' }),
+    )
+    expect(fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:8000/api/tag-suggestions/41/confirm',
+      expect.objectContaining({ method: 'POST' }),
+    )
+
+    await user.click(within(screen.getByRole('navigation', { name: '主导航' })).getByRole('button', { name: '记忆' }))
+    expect(await screen.findByText('建议：偏好')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '忽略 偏好' }))
+    expect(fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:8000/api/tag-suggestions/42/ignore',
+      expect.objectContaining({ method: 'POST' }),
+    )
+
+    await user.click(screen.getByRole('button', { name: '提问' }))
+    await user.type(screen.getByLabelText('询问 Lumen'), 'Lumen 应该引用什么？')
+    await user.click(screen.getByRole('button', { name: '询问 Lumen' }))
+    expect(await screen.findByRole('button', { name: '收藏回答' })).toBeInTheDocument()
+  })
+
+  it('shows status view and retries failed sources', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(within(screen.getByRole('navigation', { name: '主导航' })).getByRole('button', { name: '状态' }))
+
+    expect(await screen.findByText('系统状态')).toBeInTheDocument()
+    expect(screen.getByText('索引失败：1')).toBeInTheDocument()
+    expect(screen.getByText('标签建议：2')).toBeInTheDocument()
+    expect(screen.getByText('失败链接')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '重试资料' }))
+    expect(fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:8000/api/sources/12/retry',
       expect.objectContaining({ method: 'POST' }),
     )
   })

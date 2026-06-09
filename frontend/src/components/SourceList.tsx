@@ -2,6 +2,7 @@ import { useState } from 'react'
 
 import { useDeleteSource, useIndexSource, useSourceDetail, useSources } from '../api/hooks'
 import { formatSourceStatus } from '../i18n'
+import { OrganizationControls } from './OrganizationControls'
 
 export function SourceList() {
   const { data: sources = [] } = useSources()
@@ -38,6 +39,7 @@ export function SourceList() {
                   </button>
                 </div>
               ) : null}
+              <OrganizationControls targetType="source" targetId={source.id} label="资料" />
               <div className="memory-actions">
                 <button disabled={isBusy} onClick={() => setSelectedSourceId(source.id)} type="button">
                   查看详情
@@ -55,6 +57,7 @@ export function SourceList() {
                 <p>原始位置：{selectedSource.url ?? selectedSource.filename}</p>
               ) : null}
               {selectedSource.error_message ? <p>解析错误：{selectedSource.error_message}</p> : null}
+              <OrganizationControls targetType="source" targetId={selectedSource.id} label="资料" />
               <div className="memory-actions">
                 <button disabled={isBusy} onClick={() => indexSource.mutate(selectedSource.id)} type="button">
                   重试索引

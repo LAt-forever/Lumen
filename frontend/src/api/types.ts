@@ -39,7 +39,7 @@ export type RuntimeSettingsRead = {
   embedding_mode: string
   configuration_hint: string | null
   latest_fallback_reason: string | null
-  runtime_source: 'environment' | 'database-profile'
+  runtime_source: 'environment' | 'database-profile' | 'extractive'
   active_profile_id: number | null
   active_profile_name: string | null
 }
@@ -82,6 +82,68 @@ export type ChunkRead = EvidenceMatch & {
   source_title: string
   text: string
   score: number
+}
+
+export type TargetType = 'source' | 'memory' | 'message'
+
+export type TagRead = {
+  id: number
+  name: string
+  color: string | null
+  created_at: string
+}
+
+export type TagAssignmentRead = {
+  id: number
+  tag: TagRead
+  target_type: TargetType
+  target_id: number
+  source: 'user' | 'ai-confirmed'
+  created_at: string
+}
+
+export type TagSuggestionRead = {
+  id: number
+  label: string
+  target_type: TargetType
+  target_id: number
+  reason: string
+  confidence: number
+  status: 'pending' | 'confirmed' | 'ignored'
+  created_at: string
+}
+
+export type FavoriteRead = {
+  id: number
+  target_type: TargetType
+  target_id: number
+  created_at: string
+}
+
+export type GlobalSearchResultRead = EvidenceMatch & {
+  result_type: 'source_chunk' | 'source' | 'memory' | 'message'
+  target_id: number
+  title: string
+  snippet: string
+  score: number
+  tags: TagRead[]
+  is_favorite: boolean
+  created_at: string
+}
+
+export type StatusSummaryRead = {
+  runtime: RuntimeSettingsRead
+  source_counts: {
+    total: number
+    indexed: number
+    failed: number
+    pending: number
+    parsing: number
+  }
+  failed_sources: Array<Pick<SourceRead, 'id' | 'title' | 'source_type' | 'error_message' | 'created_at'>>
+  pending_tag_suggestion_count: number
+  latest_fallback_reason: string | null
+  suggested_actions: Array<{ label: string; target_view: string; target_id: number | null }>
 }
 
 export type MemoryCandidateRead = {
