@@ -735,3 +735,35 @@ p {
 .memory-graph-node:hover .memory-graph-node-circle {
   stroke: var(--focus);
 }
+
+.graph-controls {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.graph-controls .field-label {
+  margin-bottom: 0;
+}
+
+.graph-controls select {
+  min-height: 38px;
+}
+
+.graph-relation-editor {
+  margin-top: 18px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+
+.graph-relation-editor .inline-fields {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.graph-relation-editor .inline-fields select {
+  flex: 1;
+}

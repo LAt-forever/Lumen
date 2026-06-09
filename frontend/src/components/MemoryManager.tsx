@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-import { useDuplicateMemorySuggestions, useForgetMemory, useMemories, useMergeMemory, useUpdateMemory } from '../api/hooks'
+import { useDuplicateMemorySuggestions, useForgetMemory, useMemories, useMergeMemory, usePromoteDuplicateToRelation, useUpdateMemory } from '../api/hooks'
 import type { MemoryRead } from '../api/types'
 import { formatMemoryType } from '../i18n'
 import { OrganizationControls } from './OrganizationControls'
@@ -19,9 +19,10 @@ export function MemoryManager() {
   const updateMemory = useUpdateMemory()
   const forgetMemory = useForgetMemory()
   const mergeMemory = useMergeMemory()
+  const promoteDuplicate = usePromoteDuplicateToRelation()
   const [editing, setEditing] = useState<EditState>()
   const [mergeTargets, setMergeTargets] = useState<Record<number, number>>({})
-  const isBusy = updateMemory.isPending || forgetMemory.isPending || mergeMemory.isPending
+  const isBusy = updateMemory.isPending || forgetMemory.isPending || mergeMemory.isPending || promoteDuplicate.isPending
 
   const startEdit = (memory: MemoryRead) => {
     setEditing({ id: memory.id, text: memory.text, memory_type: memory.memory_type })
@@ -154,6 +155,19 @@ export function MemoryManager() {
                     type="button"
                   >
                     合并这组记忆
+                  </button>
+                  <button
+                    disabled={isBusy}
+                    onClick={() =>
+                      promoteDuplicate.mutate({
+                        sourceMemoryId: suggestion.source_memory_id,
+                        targetMemoryId: suggestion.target_memory_id,
+                      })
+                    }
+                    type="button"
+                    className="secondary"
+                  >
+                    标记为相关
                   </button>
                 </div>
               ))}

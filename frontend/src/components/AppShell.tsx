@@ -6,6 +6,7 @@ import type { ChatResponse } from '../api/types'
 import { CapturePanel } from './CapturePanel'
 import { ChatPanel } from './ChatPanel'
 import { ContextPanel } from './ContextPanel'
+import { MemoryGraphPanel } from './MemoryGraphPanel'
 import { MemoryManager } from './MemoryManager'
 import { MemoryInbox } from './MemoryInbox'
 import { ReviewPanel } from './ReviewPanel'
@@ -14,7 +15,7 @@ import { SettingsPanel } from './SettingsPanel'
 import { SourceList } from './SourceList'
 import { StatusPanel } from './StatusPanel'
 
-export type ViewKey = 'today' | 'ask' | 'library' | 'memory' | 'search' | 'review' | 'status' | 'settings'
+export type ViewKey = 'today' | 'ask' | 'library' | 'memory' | 'graph' | 'search' | 'review' | 'status' | 'settings'
 
 export type NavItem = {
   label: string
@@ -90,6 +91,9 @@ export function AppShell({ navItems }: AppShellProps) {
           <MemoryInbox />
         </>
       )
+    }
+    if (activeView === 'graph') {
+      return <MemoryGraphPanel />
     }
     if (activeView === 'search') {
       return <SearchPanel />

@@ -553,6 +553,65 @@ describe('Lumen workbench', () => {
             created_at: '2026-06-05T00:00:00',
           })
         }
+        if (url.includes('/api/memories/') && url.includes('/graph') && method === 'GET') {
+          return jsonResponse({
+            center_memory_id: 10,
+            nodes: [
+              { id: 10, text: '用户喜欢引用清楚的回答。', memory_type: 'preference', status: 'active' },
+              { id: 11, text: 'Lumen 是当前个人知识库项目。', memory_type: 'project', status: 'active' },
+            ],
+            edges: [
+              {
+                id: 100,
+                source_memory_id: 10,
+                target_memory_id: 11,
+                relation_type: 'related_to',
+                provenance: 'user',
+                strength: 72,
+                status: 'active',
+              },
+            ],
+          })
+        }
+        if (url.includes('/api/memories/') && url.includes('/relations') && method === 'GET') {
+          return jsonResponse([])
+        }
+        if (url.includes('/api/memories/') && url.includes('/relations') && method === 'POST') {
+          return jsonResponse({
+            id: 101,
+            source_memory_id: 10,
+            target_memory_id: 11,
+            relation_type: 'related_to',
+            provenance: 'user',
+            strength: 70,
+            status: 'active',
+            created_at: '2026-06-05T00:00:00',
+          })
+        }
+        if (url.includes('/api/memories/') && url.includes('/relations/') && url.includes('/forget') && method === 'POST') {
+          return jsonResponse({
+            id: 100,
+            source_memory_id: 10,
+            target_memory_id: 11,
+            relation_type: 'related_to',
+            provenance: 'user',
+            strength: 72,
+            status: 'forgotten',
+            created_at: '2026-06-05T00:00:00',
+          })
+        }
+        if (url.includes('/api/memories/duplicate-suggestions/') && url.includes('/relate') && method === 'POST') {
+          return jsonResponse({
+            id: 102,
+            source_memory_id: 11,
+            target_memory_id: 10,
+            relation_type: 'related_to',
+            provenance: 'user',
+            strength: 72,
+            status: 'active',
+            created_at: '2026-06-05T00:00:00',
+          })
+        }
         throw new Error(`Unhandled request: ${method} ${url}`)
       }),
     )
@@ -816,5 +875,14 @@ describe('Lumen workbench', () => {
       'http://127.0.0.1:8000/api/sources/12/retry',
       expect.objectContaining({ method: 'POST' }),
     )
+  })
+
+  it('renders the graph view and shows memory relations', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(screen.getByRole('button', { name: '图谱' }))
+    expect(await screen.findByText('记忆图谱')).toBeInTheDocument()
+    expect(screen.getByLabelText('中心记忆')).toBeInTheDocument()
   })
 })
