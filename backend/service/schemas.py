@@ -6,7 +6,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 SourceStatus = Literal["pending", "parsing", "indexed", "failed"]
-SourceType = Literal["note", "markdown", "text", "pdf", "link"]
+SourceType = Literal["note", "markdown", "text", "pdf", "link", "bookmark", "web_crawl"]
 MemoryCandidateStatus = Literal["pending", "confirmed", "ignored", "merged"]
 MemoryStatus = Literal["active", "edited", "forgotten", "merged"]
 MemoryType = Literal["preference", "fact", "project", "relationship", "goal", "event", "note"]
@@ -341,3 +341,21 @@ class LLMProviderProfileRead(BaseModel):
     last_checked_at: datetime | None
     created_at: datetime
     updated_at: datetime
+
+
+class BulkUploadResult(BaseModel):
+    total: int
+    succeeded: int
+    failed: int
+    sources: list[SourceRead]
+
+
+class WebCrawlRequest(BaseModel):
+    url: str = Field(min_length=1, max_length=1000)
+    max_depth: int = Field(default=2, ge=1, le=3)
+    max_pages: int = Field(default=10, ge=1, le=50)
+    same_domain_only: bool = True
+
+
+class BookmarkImportRequest(BaseModel):
+    html_content: str = Field(min_length=1)

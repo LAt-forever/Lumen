@@ -11,7 +11,14 @@ from service.db import get_db
 from service.models import Source
 from service.repositories.chunks import ChunkRepository
 from service.repositories.sources import SourceRepository
-from service.schemas import LinkCapture, SourceCreate, SourceDetailRead, SourceRead
+from service.schemas import (
+    BookmarkImportRequest,
+    BulkUploadResult,
+    LinkCapture,
+    SourceCreate,
+    SourceDetailRead,
+    SourceRead,
+)
 
 router = APIRouter(prefix="/api/sources", tags=["sources"])
 
@@ -194,3 +201,82 @@ def delete_source(source_id: int, db: Session = Depends(get_db)):
     ChunkRepository(db).delete_for_source(source_id)
     sources.delete(source_id)
     return Response(status_code=204)
+
+
+@router.post("/bookmarks", response_model=BulkUploadResult)
+async def import_bookmarks(data: BookmarkImportRequest, db: Session = Depends(get_db)):
+    from bs4 import BeautifulSoup
+
+    sources = SourceRepository(db)
+    knowledge = KnowledgeService(sources, ChunkRepository(db))
+
+    soup = BeautifulSoup(data.html_content, "html.parser")
+    bookmarks = []
+
+    for dt in soup.find_all("dt"):
+        a_tag = dt.find("a")
+        if a_tag is None:
+            continue
+        href = a_tag.get("href", "").strip()
+        title = a_tag.get_text(strip=True)
+        if not href or not title:
+            continue
+        bookmarks.append({"title": title, "url": href})
+
+    if not bookmarks:
+        raise HTTPException(status_code=400, detail="No bookmarks found in HTML content")
+
+    result_sources: list[Source] = []
+    succeeded = 0
+    failed = 0
+
+    for bm in bookmarks:
+        try:
+            temp_source = Source(
+                title=bm["title"],
+                source_type="bookmark",
+                url=bm["url"],
+            )
+            link_parser = get_parser("link")
+            parse_result = await link_parser.parse(temp_source)
+            content = parse_result.text.strip()
+            if not content:
+                raise ValueError("No text content found")
+            source = sources.create(
+                SourceCreate(
+                    title=bm["title"],
+                    source_type="bookmark",
+                    url=bm["url"],
+                    content=content,
+                )
+            )
+            knowledge.index_source(source.id)
+            refreshed = sources.get(source.id)
+            if refreshed is not None:
+                result_sources.append(refreshed)
+            succeeded += 1
+        except Exception:
+            fallback_content = f"标题: {bm['title']}\n链接: {bm['url']}"
+            try:
+                source = sources.create(
+                    SourceCreate(
+                        title=bm["title"],
+                        source_type="bookmark",
+                        url=bm["url"],
+                        content=fallback_content,
+                    )
+                )
+                knowledge.index_source(source.id)
+                refreshed = sources.get(source.id)
+                if refreshed is not None:
+                    result_sources.append(refreshed)
+                succeeded += 1
+            except Exception:
+                failed += 1
+
+    return BulkUploadResult(
+        total=len(bookmarks),
+        succeeded=succeeded,
+        failed=failed,
+        sources=[SourceRead.model_validate(s) for s in result_sources],
+    )
