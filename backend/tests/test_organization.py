@@ -87,3 +87,28 @@ def test_favorite_create_and_delete_are_idempotent(client):
     assert first_delete.status_code == 204
     assert second_delete.status_code == 204
     assert client.get("/api/favorites").json() == []
+
+
+def test_tag_suggestions_can_be_confirmed_or_ignored(client):
+    source = _create_source(client, title="Phase15 标签建议资料")
+    client.post(f"/api/sources/{source['id']}/index")
+
+    suggestions = client.get("/api/tag-suggestions").json()
+
+    assert suggestions
+    phase_suggestion = next(suggestion for suggestion in suggestions if suggestion["target_id"] == source["id"])
+    confirm = client.post(f"/api/tag-suggestions/{phase_suggestion['id']}/confirm")
+    assert confirm.status_code == 200
+    assignment = confirm.json()
+    assert assignment["target_type"] == "source"
+    assert assignment["target_id"] == source["id"]
+    assert assignment["source"] == "ai-confirmed"
+
+    other_source = _create_source(client, title="忽略建议资料")
+    client.post(f"/api/sources/{other_source['id']}/index")
+    remaining = client.get("/api/tag-suggestions").json()
+    ignored_candidate = next(suggestion for suggestion in remaining if suggestion["target_id"] == other_source["id"])
+    ignored = client.post(f"/api/tag-suggestions/{ignored_candidate['id']}/ignore")
+
+    assert ignored.status_code == 200
+    assert ignored.json()["status"] == "ignored"

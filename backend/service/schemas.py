@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import datetime
 from typing import Literal
 
@@ -191,6 +193,37 @@ class GlobalSearchResultRead(BaseModel):
     tags: list[TagRead] = Field(default_factory=list)
     is_favorite: bool = False
     created_at: datetime
+
+
+class SourceCountsRead(BaseModel):
+    total: int
+    indexed: int
+    failed: int
+    pending: int
+    parsing: int
+
+
+class FailedSourceRead(BaseModel):
+    id: int
+    title: str
+    source_type: str
+    error_message: str | None
+    created_at: datetime
+
+
+class StatusActionRead(BaseModel):
+    label: str
+    target_view: str
+    target_id: int | None = None
+
+
+class StatusSummaryRead(BaseModel):
+    runtime: RuntimeSettingsRead
+    source_counts: SourceCountsRead
+    failed_sources: list[FailedSourceRead] = Field(default_factory=list)
+    pending_tag_suggestion_count: int
+    latest_fallback_reason: str | None = None
+    suggested_actions: list[StatusActionRead] = Field(default_factory=list)
 
 
 class MemoryDuplicateSuggestionRead(BaseModel):

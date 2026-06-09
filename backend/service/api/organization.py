@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 
+from service.core.tagging import TagSuggestionService
 from service.db import get_db
 from service.repositories.conversations import ConversationRepository
 from service.repositories.memories import MemoryRepository
@@ -56,7 +57,14 @@ def delete_assignment(assignment_id: int, db: Session = Depends(get_db)):
 
 @router.get("/api/tag-suggestions", response_model=list[TagSuggestionRead])
 def list_tag_suggestions(target_type: str | None = None, target_id: int | None = None, db: Session = Depends(get_db)):
-    return OrganizationRepository(db).pending_suggestions(target_type=target_type, target_id=target_id)
+    repo = OrganizationRepository(db)
+    TagSuggestionService(
+        SourceRepository(db),
+        MemoryRepository(db),
+        ConversationRepository(db),
+        repo,
+    ).ensure_suggestions_for_existing()
+    return repo.pending_suggestions(target_type=target_type, target_id=target_id)
 
 
 @router.post("/api/tag-suggestions/{suggestion_id}/confirm", response_model=TagAssignmentRead)

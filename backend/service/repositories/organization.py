@@ -72,8 +72,21 @@ class OrganizationRepository:
         return list(self.db.scalars(stmt))
 
     def create_suggestion(self, label: str, target_type: str, target_id: int, reason: str, confidence: int = 70) -> TagSuggestion:
+        cleaned = re.sub(r"\s+", " ", label.strip())
+        normalized = normalize_tag_name(cleaned)
+        existing = list(
+            self.db.scalars(
+                select(TagSuggestion).where(
+                    TagSuggestion.target_type == target_type,
+                    TagSuggestion.target_id == target_id,
+                )
+            )
+        )
+        for suggestion in existing:
+            if normalize_tag_name(suggestion.label) == normalized:
+                return suggestion
         suggestion = TagSuggestion(
-            label=re.sub(r"\s+", " ", label.strip()),
+            label=cleaned,
             target_type=target_type,
             target_id=target_id,
             reason=reason,
@@ -92,6 +105,9 @@ class OrganizationRepository:
             stmt = stmt.where(TagSuggestion.target_id == target_id)
         stmt = stmt.order_by(TagSuggestion.created_at.desc(), TagSuggestion.id.desc())
         return list(self.db.scalars(stmt))
+
+    def pending_suggestion_count(self) -> int:
+        return len(self.pending_suggestions())
 
     def confirm_suggestion(self, suggestion_id: int) -> TagAssignment:
         suggestion = self.db.get(TagSuggestion, suggestion_id)

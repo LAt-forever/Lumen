@@ -28,6 +28,32 @@ class SourceRepository:
     def list_all(self) -> list[Source]:
         return list(self.db.scalars(select(Source).order_by(Source.id.asc())))
 
+    def failed_sources(self, limit: int = 10) -> list[Source]:
+        stmt = (
+            select(Source)
+            .where(Source.status == "failed")
+            .order_by(Source.updated_at.desc(), Source.id.desc())
+            .limit(limit)
+        )
+        return list(self.db.scalars(stmt))
+
+    def status_counts(self) -> dict[str, int]:
+        counts = {"total": 0, "indexed": 0, "failed": 0, "pending": 0, "parsing": 0}
+        for source in self.list_all():
+            counts["total"] += 1
+            if source.status in counts:
+                counts[source.status] += 1
+        return counts
+
+    def update_content(self, source_id: int, content: str) -> Source:
+        source = self.db.get(Source, source_id)
+        if source is None:
+            raise ValueError(f"source {source_id} not found")
+        source.content = content
+        self.db.commit()
+        self.db.refresh(source)
+        return source
+
     def delete(self, source_id: int) -> None:
         source = self.db.get(Source, source_id)
         if source is None:

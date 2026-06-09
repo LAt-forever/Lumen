@@ -42,6 +42,22 @@ def _failed_source(sources: SourceRepository, data: SourceCreate, message: str):
     return refreshed
 
 
+def _source_detail(source, db: Session) -> SourceDetailRead:
+    return SourceDetailRead.model_validate(
+        {
+            "id": source.id,
+            "title": source.title,
+            "source_type": source.source_type,
+            "status": source.status,
+            "url": source.url,
+            "filename": source.filename,
+            "error_message": source.error_message,
+            "created_at": source.created_at,
+            "chunk_count": ChunkRepository(db).count_for_source(source.id),
+        }
+    )
+
+
 @router.post("", response_model=SourceRead)
 def create_source(data: SourceCreate, db: Session = Depends(get_db)):
     return SourceRepository(db).create(data)
@@ -113,19 +129,7 @@ def get_source(source_id: int, db: Session = Depends(get_db)):
     source = sources.get(source_id)
     if source is None:
         raise HTTPException(status_code=404, detail="Source not found")
-    return SourceDetailRead.model_validate(
-        {
-            "id": source.id,
-            "title": source.title,
-            "source_type": source.source_type,
-            "status": source.status,
-            "url": source.url,
-            "filename": source.filename,
-            "error_message": source.error_message,
-            "created_at": source.created_at,
-            "chunk_count": ChunkRepository(db).count_for_source(source.id),
-        }
-    )
+    return _source_detail(source, db)
 
 
 @router.post("/{source_id}/index", response_model=SourceRead)
@@ -139,6 +143,34 @@ def index_source(source_id: int, db: Session = Depends(get_db)):
     if source is None:
         raise HTTPException(status_code=404, detail="Source not found")
     return source
+
+
+@router.post("/{source_id}/retry", response_model=SourceDetailRead)
+def retry_source(source_id: int, db: Session = Depends(get_db)):
+    sources = SourceRepository(db)
+    source = sources.get(source_id)
+    if source is None:
+        raise HTTPException(status_code=404, detail="Source not found")
+    if source.source_type == "link" and source.url:
+        try:
+            html = _fetch_url_html(source.url)
+            content = parse_html(html).strip()
+            if not content:
+                raise ValueError("No text content found")
+        except Exception as exc:
+            sources.mark_failed(source.id, str(exc))
+            refreshed = sources.get(source.id)
+            if refreshed is None:
+                raise HTTPException(status_code=404, detail="Source not found")
+            return _source_detail(refreshed, db)
+        sources.update_content(source.id, content)
+
+    knowledge = KnowledgeService(sources, ChunkRepository(db))
+    knowledge.index_source(source_id)
+    refreshed = sources.get(source_id)
+    if refreshed is None:
+        raise HTTPException(status_code=404, detail="Source not found")
+    return _source_detail(refreshed, db)
 
 
 @router.delete("/{source_id}", status_code=204)
