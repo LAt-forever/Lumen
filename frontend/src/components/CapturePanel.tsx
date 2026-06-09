@@ -1,7 +1,15 @@
 import { ChangeEvent, FormEvent, useRef, useState } from 'react'
 
-import { useAskLumen, useAskLumenStream, useCaptureLink, useCreateSource, useUploadSource } from '../api/hooks'
-import type { ChatResponse } from '../api/types'
+import {
+  useAskLumen,
+  useAskLumenStream,
+  useCaptureLink,
+  useCreateSource,
+  useCrawlWeb,
+  useImportBookmarks,
+  useUploadSources,
+} from '../api/hooks'
+import type { BulkUploadResult, ChatResponse } from '../api/types'
 
 type CapturePanelProps = {
   onResponse?: (response: ChatResponse) => void
@@ -9,19 +17,27 @@ type CapturePanelProps = {
   onStreamStart?: () => void
 }
 
-type CaptureMode = 'note' | 'file' | 'link'
+type CaptureMode = 'note' | 'file' | 'link' | 'bookmarks'
 
 export function CapturePanel({ onResponse, onStreamChunk, onStreamStart }: CapturePanelProps) {
   const [mode, setMode] = useState<CaptureMode>('note')
   const [draft, setDraft] = useState('')
-  const [selectedFile, setSelectedFile] = useState<File>()
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([])
+  const [uploadResult, setUploadResult] = useState<BulkUploadResult | null>(null)
   const [link, setLink] = useState('')
+  const [deepCrawl, setDeepCrawl] = useState(false)
+  const [crawlDepth, setCrawlDepth] = useState(1)
+  const [crawlMaxPages, setCrawlMaxPages] = useState(10)
+  const [bookmarkHtml, setBookmarkHtml] = useState('')
+  const [bookmarkResult, setBookmarkResult] = useState<BulkUploadResult | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const askLumen = useAskLumen()
   const askLumenStream = useAskLumenStream()
   const createSource = useCreateSource()
-  const uploadSource = useUploadSource()
+  const uploadSources = useUploadSources()
   const captureLink = useCaptureLink()
+  const crawlWeb = useCrawlWeb()
+  const importBookmarks = useImportBookmarks()
 
   const handleAsk = (event: FormEvent) => {
     event.preventDefault()
@@ -48,42 +64,72 @@ export function CapturePanel({ onResponse, onStreamChunk, onStreamStart }: Captu
     }
   }
 
-  const resetSelectedFile = () => {
-    setSelectedFile(undefined)
+  const resetSelectedFiles = () => {
+    setSelectedFiles([])
+    setUploadResult(null)
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
     }
   }
 
-  const uploadSelectedFile = (file: File) => {
-    uploadSource.mutate(file, { onSuccess: resetSelectedFile })
-  }
-
-  const handleFileSelected = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    setSelectedFile(file)
-    if (file) {
-      uploadSelectedFile(file)
+  const handleFilesSelected = (event: ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files
+    if (files && files.length > 0) {
+      setSelectedFiles(Array.from(files))
+      setUploadResult(null)
     }
   }
 
   const handleUpload = () => {
-    if (!selectedFile) {
+    if (selectedFiles.length === 0) {
       fileInputRef.current?.click()
       return
     }
-    uploadSelectedFile(selectedFile)
+    uploadSources.mutate(selectedFiles, {
+      onSuccess: (result) => {
+        setUploadResult(result)
+        setSelectedFiles([])
+        if (fileInputRef.current) {
+          fileInputRef.current.value = ''
+        }
+      },
+    })
   }
 
   const handleCaptureLink = () => {
     const url = link.trim()
-    if (url) {
+    if (!url) return
+    if (deepCrawl) {
+      crawlWeb.mutate({
+        url,
+        max_depth: crawlDepth,
+        max_pages: crawlMaxPages,
+        same_domain_only: true,
+      })
+    } else {
       captureLink.mutate(url)
     }
   }
 
+  const handleImportBookmarks = () => {
+    const htmlContent = bookmarkHtml.trim()
+    if (!htmlContent) return
+    importBookmarks.mutate(htmlContent, {
+      onSuccess: (result) => {
+        setBookmarkResult(result)
+        setBookmarkHtml('')
+      },
+    })
+  }
+
   const isBusy =
-    askLumen.isPending || askLumenStream.isPending || createSource.isPending || uploadSource.isPending || captureLink.isPending
+    askLumen.isPending ||
+    askLumenStream.isPending ||
+    createSource.isPending ||
+    uploadSources.isPending ||
+    captureLink.isPending ||
+    crawlWeb.isPending ||
+    importBookmarks.isPending
   const canUseDraft = mode === 'note' && Boolean(draft.trim())
 
   return (
@@ -104,6 +150,9 @@ export function CapturePanel({ onResponse, onStreamChunk, onStreamStart }: Captu
         </button>
         <button className={mode === 'link' ? 'active' : ''} onClick={() => setMode('link')} type="button">
           链接
+        </button>
+        <button className={mode === 'bookmarks' ? 'active' : ''} onClick={() => setMode('bookmarks')} type="button">
+          书签
         </button>
       </div>
 
@@ -136,19 +185,32 @@ export function CapturePanel({ onResponse, onStreamChunk, onStreamStart }: Captu
             选择资料文件
           </label>
           <input
-            accept=".txt,.md,.pdf"
+            accept=".txt,.md,.pdf,.docx,.epub,.png,.jpg,.jpeg,.gif,.webp"
             id="source-file"
-            onChange={handleFileSelected}
+            multiple
+            onChange={handleFilesSelected}
             ref={fileInputRef}
             type="file"
           />
           <p className="helper-text">
-            {selectedFile ? `正在上传：${selectedFile.name}` : '支持 TXT、Markdown、PDF。选择文件后会自动上传。'}
+            {selectedFiles.length > 0
+              ? `已选择 ${selectedFiles.length} 个文件`
+              : '支持 TXT、Markdown、PDF、DOCX、EPUB、PNG、JPG、JPEG、GIF、WEBP。选择文件后点击上传。'}
           </p>
+          {uploadResult ? (
+            <p className="helper-text">
+              上传完成：成功 {uploadResult.succeeded}，失败 {uploadResult.failed}
+            </p>
+          ) : null}
           <div className="action-row">
             <button disabled={isBusy} onClick={handleUpload} type="button">
-              上传文件
+              {selectedFiles.length > 0 ? '上传文件' : '选择文件'}
             </button>
+            {selectedFiles.length > 0 || uploadResult ? (
+              <button disabled={isBusy} onClick={resetSelectedFiles} type="button" className="secondary">
+                清除
+              </button>
+            ) : null}
           </div>
         </div>
       ) : null}
@@ -165,10 +227,80 @@ export function CapturePanel({ onResponse, onStreamChunk, onStreamStart }: Captu
             type="url"
             value={link}
           />
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.5rem', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={deepCrawl}
+              onChange={(event) => setDeepCrawl(event.target.checked)}
+            />
+            <span>深度抓取（递归抓取同域页面）</span>
+          </label>
+          {deepCrawl ? (
+            <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span>深度</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={3}
+                  value={crawlDepth}
+                  onChange={(event) => setCrawlDepth(Math.min(3, Math.max(1, Number(event.target.value))))}
+                  style={{ width: '4rem' }}
+                />
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span>最大页数</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={50}
+                  value={crawlMaxPages}
+                  onChange={(event) => setCrawlMaxPages(Math.min(50, Math.max(1, Number(event.target.value))))}
+                  style={{ width: '4rem' }}
+                />
+              </label>
+            </div>
+          ) : null}
           <div className="action-row">
             <button disabled={isBusy || !link.trim()} onClick={handleCaptureLink} type="button">
-              添加链接
+              {deepCrawl ? '深度抓取' : '添加链接'}
             </button>
+          </div>
+        </div>
+      ) : null}
+
+      {mode === 'bookmarks' ? (
+        <div className="form-stack">
+          <label className="field-label" htmlFor="bookmark-html">
+            粘贴 Netscape HTML 书签内容
+          </label>
+          <textarea
+            id="bookmark-html"
+            aria-label="书签 HTML 内容"
+            onChange={(event) => setBookmarkHtml(event.target.value)}
+            placeholder="粘贴从浏览器导出的书签 HTML 内容..."
+            value={bookmarkHtml}
+            rows={8}
+          />
+          {bookmarkResult ? (
+            <p className="helper-text">
+              导入完成：共 {bookmarkResult.total} 个，成功 {bookmarkResult.succeeded} 个
+            </p>
+          ) : null}
+          <div className="action-row">
+            <button disabled={isBusy || !bookmarkHtml.trim()} onClick={handleImportBookmarks} type="button">
+              导入书签
+            </button>
+            {bookmarkResult ? (
+              <button
+                disabled={isBusy}
+                onClick={() => setBookmarkResult(null)}
+                type="button"
+                className="secondary"
+              >
+                清除结果
+              </button>
+            ) : null}
           </div>
         </div>
       ) : null}

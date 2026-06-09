@@ -738,10 +738,16 @@ describe('Lumen workbench', () => {
 
     await user.click(screen.getByRole('button', { name: '文件' }))
 
-    expect(screen.getByRole('button', { name: '上传文件' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: '选择文件' })).toBeEnabled()
 
     const file = new File(['Lumen immediate upload check.'], 'instant-upload.txt', { type: 'text/plain' })
     await user.upload(screen.getByLabelText('选择资料文件'), file)
+
+    // Multi-file mode: selecting a file shows count but does not auto-upload
+    expect(screen.getByText('已选择 1 个文件')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '上传文件' })).toBeEnabled()
+
+    await user.click(screen.getByRole('button', { name: '上传文件' }))
 
     await waitFor(() =>
       expect(fetch).toHaveBeenCalledWith(
