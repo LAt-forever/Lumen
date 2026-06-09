@@ -27,13 +27,13 @@ def test_source_retry_reindexes_failed_source_without_deleting_history(client, m
 
     calls = {"count": 0}
 
-    async def fake_parse_link(self, raw, **kwargs):
+    async def fake_parse_link(self, source, **kwargs):
         from service.core.parsers.base import ParseResult
 
         calls["count"] += 1
         if calls["count"] == 1:
             raise RuntimeError("temporary link failure")
-        return ParseResult(content="RetryMarker 链接重试后可以索引。")
+        return ParseResult(text="RetryMarker 链接重试后可以索引。")
 
     monkeypatch.setattr(WebParser, "_parse_link", fake_parse_link)
     failed = client.post("/api/sources/link", json={"url": "https://example.com/retry"}).json()

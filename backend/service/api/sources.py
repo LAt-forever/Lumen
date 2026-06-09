@@ -6,7 +6,9 @@ from sqlalchemy.orm import Session
 
 from service.core.knowledge import KnowledgeService
 from service.core.parsers import get_parser
+from service.core.storage import save_temp_upload, move_to_final
 from service.db import get_db
+from service.models import Source
 from service.repositories.chunks import ChunkRepository
 from service.repositories.sources import SourceRepository
 from service.schemas import LinkCapture, SourceCreate, SourceDetailRead, SourceRead
@@ -68,12 +70,15 @@ async def upload_source(file: UploadFile = File(...), db: Session = Depends(get_
         if suffix in _TEXT_SUFFIXES:
             content = data.decode("utf-8").strip()
         elif suffix == ".pdf":
-            with NamedTemporaryFile(suffix=".pdf") as tmp:
-                tmp.write(data)
-                tmp.flush()
-                parser = get_parser("pdf")
-                result = await parser.parse(tmp.name)
-                content = result.content.strip()
+            temp_relative = save_temp_upload(data, filename)
+            temp_source = Source(
+                title=filename,
+                source_type="pdf",
+                filename=temp_relative,
+            )
+            parser = get_parser("pdf")
+            result = await parser.parse(temp_source)
+            content = result.text.strip()
         else:
             return _failed_source(
                 sources,
@@ -100,9 +105,14 @@ async def upload_source(file: UploadFile = File(...), db: Session = Depends(get_
 async def capture_link(data: LinkCapture, db: Session = Depends(get_db)):
     sources = SourceRepository(db)
     try:
+        temp_source = Source(
+            title=data.url,
+            source_type="link",
+            url=data.url,
+        )
         parser = get_parser("link")
-        result = await parser.parse(data.url)
-        content = result.content.strip()
+        result = await parser.parse(temp_source)
+        content = result.text.strip()
         if not content:
             raise ValueError("No text content found")
     except Exception as exc:
@@ -156,13 +166,8 @@ async def retry_source(source_id: int, db: Session = Depends(get_db)):
 
     parser = get_parser(source.source_type)
     try:
-        if source.source_type == "link" and source.url:
-            result = await parser.parse(source.url)
-        elif source.source_type == "pdf" and source.filename:
-            result = await parser.parse(source.content or "")
-        else:
-            result = await parser.parse(source.content or "")
-        content = result.content.strip()
+        result = await parser.parse(source)
+        content = result.text.strip()
         if not content:
             raise ValueError("No text content found")
     except Exception as exc:

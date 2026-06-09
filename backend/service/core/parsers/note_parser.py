@@ -1,15 +1,16 @@
-from service.core.parsers.base import ParseResult
 from service.core.parsers import register_parser
+from service.core.parsers.base import ParseResult
 
 
 class NoteParser:
-    source_type = "note"
+    supported_types = frozenset({"note", "markdown", "text"})
 
-    async def parse(self, raw: str | bytes, **kwargs) -> ParseResult:
-        if isinstance(raw, bytes):
-            raw = raw.decode("utf-8")
-        content = (raw or "").strip()
-        return ParseResult(content=content)
+    async def parse(self, source, **kwargs) -> ParseResult:
+        content = source.content
+        if isinstance(content, bytes):
+            content = content.decode("utf-8")
+        text = (content or "").strip()
+        return ParseResult(text=text)
 
 
 register_parser(NoteParser())

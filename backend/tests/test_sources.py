@@ -113,11 +113,11 @@ def test_upload_unsupported_file_creates_failed_source(client):
 def test_capture_link_extracts_html_text(client, monkeypatch):
     from service.core.parsers.web_parser import WebParser
 
-    async def fake_parse_link(self, raw, **kwargs):
+    async def fake_parse_link(self, source, **kwargs):
         from service.core.parsers.base import ParseResult
 
         return ParseResult(
-            content="Lumen link capture should be searchable.",
+            text="Lumen link capture should be searchable.",
             title="Lumen Link",
         )
 
@@ -138,7 +138,7 @@ def test_capture_link_extracts_html_text(client, monkeypatch):
 def test_capture_link_fetch_failure_creates_failed_source(client, monkeypatch):
     from service.core.parsers.web_parser import WebParser
 
-    async def fail_parse_link(self, raw, **kwargs):
+    async def fail_parse_link(self, source, **kwargs):
         raise RuntimeError("Could not fetch URL")
 
     monkeypatch.setattr(WebParser, "_parse_link", fail_parse_link)

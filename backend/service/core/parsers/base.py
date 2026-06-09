@@ -1,16 +1,18 @@
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Any, Protocol
+
+from service.models import Source
 
 
 @dataclass
 class ParseResult:
-    content: str
+    text: str
     title: str | None = None
-    metadata: dict | None = None
+    metadata: dict[str, Any] | None = None
 
 
 class ContentParser(Protocol):
-    source_type: str
+    supported_types: frozenset[str]
 
-    async def parse(self, raw: str | bytes, **kwargs) -> ParseResult:
+    async def parse(self, source: Source, **kwargs) -> ParseResult:
         ...

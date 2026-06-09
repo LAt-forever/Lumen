@@ -7,7 +7,8 @@ _registry: dict[str, ContentParser] = {}
 
 
 def register_parser(parser: ContentParser) -> ContentParser:
-    _registry[parser.source_type] = parser
+    for source_type in parser.supported_types:
+        _registry[source_type] = parser
     return parser
 
 
