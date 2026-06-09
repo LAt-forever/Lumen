@@ -163,3 +163,46 @@ def test_search_does_not_return_unrelated_memories():
     service.confirm(candidate.id)
 
     assert service.search("晚饭吃什么？") == []
+
+
+def test_create_relation_endpoint(client):
+    client.post("/api/chat", json={"message": "我正在做 A 项目"})
+    c1 = client.get("/api/memories/candidates").json()[0]
+    r1 = client.post(f"/api/memories/candidates/{c1['id']}/confirm", json={"text": "A", "memory_type": "note"}).json()
+    client.post("/api/chat", json={"message": "我喜欢 B 项目"})
+    c2 = client.get("/api/memories/candidates").json()[0]
+    r2 = client.post(f"/api/memories/candidates/{c2['id']}/confirm", json={"text": "B", "memory_type": "note"}).json()
+
+    response = client.post(f"/api/memories/{r1['id']}/relations", json={
+        "target_memory_id": r2["id"],
+        "relation_type": "supports",
+        "provenance": "user:test",
+        "strength": 85,
+    })
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["relation_type"] == "supports"
+    assert data["strength"] == 85
+    assert data["target_memory_id"] == r2["id"]
+
+
+def test_graph_endpoint_returns_nodes_and_edges(client):
+    client.post("/api/chat", json={"message": "我正在做 A 项目"})
+    c1 = client.get("/api/memories/candidates").json()[0]
+    r1 = client.post(f"/api/memories/candidates/{c1['id']}/confirm", json={"text": "A", "memory_type": "note"}).json()
+    client.post("/api/chat", json={"message": "我喜欢 B 项目"})
+    c2 = client.get("/api/memories/candidates").json()[0]
+    r2 = client.post(f"/api/memories/candidates/{c2['id']}/confirm", json={"text": "B", "memory_type": "note"}).json()
+    client.post(f"/api/memories/{r1['id']}/relations", json={
+        "target_memory_id": r2["id"],
+        "relation_type": "related_to",
+    })
+
+    response = client.get(f"/api/memories/{r1['id']}/graph")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["center_memory_id"] == r1["id"]
+    assert len(data["nodes"]) == 2
+    assert len(data["edges"]) == 1
