@@ -1,7 +1,7 @@
 import json
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, replace
-from typing import Protocol
+from typing import Any, Protocol
 from urllib.parse import urljoin
 
 import httpx
@@ -100,10 +100,10 @@ class FallbackAnswerProvider:
 
 
 class ChatCompletionClient(Protocol):
-    def complete(self, messages: list[dict[str, str]]) -> str:
+    def complete(self, messages: list[dict[str, Any]]) -> str:
         ...
 
-    def stream(self, messages: list[dict[str, str]]) -> Iterator[str]:
+    def stream(self, messages: list[dict[str, Any]]) -> Iterator[str]:
         ...
 
 
@@ -140,7 +140,7 @@ class HttpxChatCompletionClient:
         self.api_key = api_key
         self.timeout_seconds = timeout_seconds
 
-    def complete(self, messages: list[dict[str, str]]) -> str:
+    def complete(self, messages: list[dict[str, Any]]) -> str:
         try:
             response = httpx.post(
                 urljoin(self.base_url, "chat/completions"),
@@ -166,7 +166,7 @@ class HttpxChatCompletionClient:
             raise ChatCompletionError("empty chat completion content")
         return content.strip()
 
-    def stream(self, messages: list[dict[str, str]]) -> Iterator[str]:
+    def stream(self, messages: list[dict[str, Any]]) -> Iterator[str]:
         try:
             with httpx.stream(
                 "POST",
@@ -242,7 +242,7 @@ class OpenAICompatibleAnswerProvider:
             answer_mode="llm",
         )
 
-    def _messages(self, evidence: EvidencePack) -> list[dict[str, str]]:
+    def _messages(self, evidence: EvidencePack) -> list[dict[str, Any]]:
         system = (
             "你是 Lumen，一个本地优先的个人知识库助手。"
             "只能依据用户提供的资料片段和已确认记忆回答。"
