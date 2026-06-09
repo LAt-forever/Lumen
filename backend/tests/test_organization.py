@@ -71,21 +71,34 @@ def test_tag_assignment_supports_source_memory_and_message_targets(client):
 
 def test_favorite_create_and_delete_are_idempotent(client):
     source = _create_source(client, title="收藏资料")
-    payload = {"target_type": "source", "target_id": source["id"]}
+    memory = _create_memory(client)
+    message = _create_message(client)
 
-    first = client.post("/api/favorites", json=payload)
-    second = client.post("/api/favorites", json=payload)
+    targets = [
+        ("source", source["id"]),
+        ("memory", memory["id"]),
+        ("message", message["message_id"]),
+    ]
+    for target_type, target_id in targets:
+        payload = {"target_type": target_type, "target_id": target_id}
 
-    assert first.status_code == 200
-    assert second.status_code == 200
-    assert first.json()["id"] == second.json()["id"]
-    assert client.get("/api/favorites").json()[0]["target_id"] == source["id"]
+        first = client.post("/api/favorites", json=payload)
+        second = client.post("/api/favorites", json=payload)
 
-    first_delete = client.delete(f"/api/favorites/source/{source['id']}")
-    second_delete = client.delete(f"/api/favorites/source/{source['id']}")
+        assert first.status_code == 200
+        assert second.status_code == 200
+        assert first.json()["id"] == second.json()["id"]
 
-    assert first_delete.status_code == 204
-    assert second_delete.status_code == 204
+    favorites = client.get("/api/favorites").json()
+    assert {(favorite["target_type"], favorite["target_id"]) for favorite in favorites} == set(targets)
+
+    for target_type, target_id in targets:
+        first_delete = client.delete(f"/api/favorites/{target_type}/{target_id}")
+        second_delete = client.delete(f"/api/favorites/{target_type}/{target_id}")
+
+        assert first_delete.status_code == 204
+        assert second_delete.status_code == 204
+
     assert client.get("/api/favorites").json() == []
 
 
