@@ -1,12 +1,21 @@
+export type SourceType = 'note' | 'pdf' | 'image' | 'docx' | 'epub' | 'bookmark' | 'web_crawl'
+
 export type SourceRead = {
   id: number
   title: string
-  source_type: string
+  source_type: SourceType
   status: string
   url: string | null
   filename: string | null
   error_message: string | null
   created_at: string
+}
+
+export interface BulkUploadResult {
+  total: number
+  succeeded: number
+  failed: number
+  sources: SourceRead[]
 }
 
 export type SourceDetailRead = SourceRead & {

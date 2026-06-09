@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api } from './client'
 import type {
+  BulkUploadResult,
   ChatResponse,
   ChunkRead,
   FavoriteRead,
@@ -70,12 +71,57 @@ function useSourceCaptureMutation<TInput>(mutationFn: (input: TInput) => Promise
   })
 }
 
+export function useUploadSources() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: api.uploadSources,
+    onSuccess: async (result: BulkUploadResult) => {
+      for (const source of result.sources) {
+        if (source.status === 'pending') await api.indexSource(source.id)
+      }
+      await queryClient.invalidateQueries({ queryKey: ['sources'] })
+      await queryClient.invalidateQueries({ queryKey: ['review'] })
+    },
+  })
+}
+
 export function useUploadSource() {
-  return useSourceCaptureMutation<File>(api.uploadSource)
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (file: File) => {
+      const result = await api.uploadSources([file])
+      return result.sources[0] as SourceRead
+    },
+    onSuccess: async (source: SourceRead) => {
+      await indexIfPending(source)
+      await queryClient.invalidateQueries({ queryKey: ['sources'] })
+      await queryClient.invalidateQueries({ queryKey: ['review'] })
+    },
+  })
 }
 
 export function useCaptureLink() {
   return useSourceCaptureMutation<string>(api.captureLink)
+}
+
+export function useCrawlWeb() {
+  return useSourceCaptureMutation<{
+    url: string
+    max_depth: number
+    max_pages: number
+    same_domain_only: boolean
+  }>(api.crawlWeb)
+}
+
+export function useImportBookmarks() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: api.importBookmarks,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['sources'] })
+      await queryClient.invalidateQueries({ queryKey: ['review'] })
+    },
+  })
 }
 
 export function useIndexSource() {

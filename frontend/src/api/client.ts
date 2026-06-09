@@ -16,6 +16,7 @@ import type {
   ReviewRead,
   RuntimeSettingsRead,
   SourceDetailRead,
+  BulkUploadResult,
   SourceRead,
   StatusSummaryRead,
   TagAssignmentRead,
@@ -106,11 +107,18 @@ export const api = {
   getSource: (sourceId: number) => request<SourceDetailRead>(`/api/sources/${sourceId}`),
   createSource: (payload: { title: string; source_type: 'note'; content: string }) =>
     request<SourceRead>('/api/sources', { method: 'POST', body: JSON.stringify(payload) }),
-  uploadSource: (file: File) => {
+  uploadSources: (files: File[]) => {
     const body = new FormData()
-    body.append('file', file)
-    return request<SourceRead>('/api/sources/upload', { method: 'POST', body })
+    files.forEach((f) => body.append('files', f))
+    return request<BulkUploadResult>('/api/sources/upload', { method: 'POST', body })
   },
+  crawlWeb: (payload: { url: string; max_depth: number; max_pages: number; same_domain_only: boolean }) =>
+    request<SourceRead>('/api/sources/crawl', { method: 'POST', body: JSON.stringify(payload) }),
+  importBookmarks: (htmlContent: string) =>
+    request<BulkUploadResult>('/api/sources/bookmarks', {
+      method: 'POST',
+      body: JSON.stringify({ html_content: htmlContent }),
+    }),
   captureLink: (url: string) =>
     request<SourceRead>('/api/sources/link', { method: 'POST', body: JSON.stringify({ url }) }),
   indexSource: (sourceId: number) => request<SourceRead>(`/api/sources/${sourceId}/index`, { method: 'POST' }),
