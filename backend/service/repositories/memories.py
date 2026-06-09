@@ -58,6 +58,10 @@ class MemoryRepository:
         stmt = select(Memory).where(Memory.status.in_(["active", "edited"])).order_by(Memory.updated_at.desc(), Memory.id.desc())
         return list(self.db.scalars(stmt))
 
+    def list_active_for_search(self) -> list[Memory]:
+        stmt = select(Memory).where(Memory.status.in_(["active", "edited"])).order_by(Memory.id.asc())
+        return list(self.db.scalars(stmt))
+
     def update(self, memory_id: int, text: str, memory_type: str) -> Memory:
         memory = self.db.get(Memory, memory_id)
         if memory is None:

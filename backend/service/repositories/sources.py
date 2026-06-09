@@ -25,6 +25,9 @@ class SourceRepository:
     def list(self) -> list[Source]:
         return list(self.db.scalars(select(Source).order_by(Source.created_at.desc(), Source.id.desc())))
 
+    def list_all(self) -> list[Source]:
+        return list(self.db.scalars(select(Source).order_by(Source.id.asc())))
+
     def delete(self, source_id: int) -> None:
         source = self.db.get(Source, source_id)
         if source is None:

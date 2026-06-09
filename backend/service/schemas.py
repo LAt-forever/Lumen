@@ -13,6 +13,7 @@ ProviderProfileStatus = Literal["untested", "ready", "failed"]
 TargetType = Literal["source", "memory", "message"]
 TagAssignmentSource = Literal["user", "ai-confirmed"]
 TagSuggestionStatus = Literal["pending", "confirmed", "ignored"]
+GlobalSearchResultType = Literal["source_chunk", "source", "memory", "message"]
 
 
 class SourceCreate(BaseModel):
@@ -175,6 +176,20 @@ class FavoriteRead(BaseModel):
     id: int
     target_type: TargetType
     target_id: int
+    created_at: datetime
+
+
+class GlobalSearchResultRead(BaseModel):
+    result_type: GlobalSearchResultType
+    target_id: int
+    title: str
+    snippet: str
+    score: float
+    matched_terms: list[str] = Field(default_factory=list)
+    matched_date: str | None = None
+    match_reason: str
+    tags: list[TagRead] = Field(default_factory=list)
+    is_favorite: bool = False
     created_at: datetime
 
 

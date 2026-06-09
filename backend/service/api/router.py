@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from service.api import chat, memories, organization, review, search, settings, sources
+from service.api import chat, global_search, memories, organization, review, search, settings, sources
 
 router = APIRouter()
 
@@ -14,6 +14,7 @@ router.include_router(sources.router)
 router.include_router(chat.router)
 router.include_router(memories.router)
 router.include_router(search.router)
+router.include_router(global_search.router)
 router.include_router(review.router)
 router.include_router(settings.router)
 router.include_router(organization.router)

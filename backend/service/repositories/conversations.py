@@ -39,3 +39,7 @@ class ConversationRepository:
     def recent_user_questions(self, limit: int = 5) -> list[str]:
         stmt = select(Message.content).where(Message.role == "user").order_by(Message.created_at.desc(), Message.id.desc()).limit(limit)
         return list(self.db.scalars(stmt))
+
+    def list_messages_for_search(self) -> list[Message]:
+        stmt = select(Message).order_by(Message.id.asc())
+        return list(self.db.scalars(stmt))
