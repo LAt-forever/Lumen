@@ -1,4 +1,4 @@
-import { FormEvent, useState } from 'react'
+import { ChangeEvent, FormEvent, useRef, useState } from 'react'
 
 import { useAskLumen, useAskLumenStream, useCaptureLink, useCreateSource, useUploadSource } from '../api/hooks'
 import type { ChatResponse } from '../api/types'
@@ -16,6 +16,7 @@ export function CapturePanel({ onResponse, onStreamChunk, onStreamStart }: Captu
   const [draft, setDraft] = useState('')
   const [selectedFile, setSelectedFile] = useState<File>()
   const [link, setLink] = useState('')
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const askLumen = useAskLumen()
   const askLumenStream = useAskLumenStream()
   const createSource = useCreateSource()
@@ -47,10 +48,31 @@ export function CapturePanel({ onResponse, onStreamChunk, onStreamStart }: Captu
     }
   }
 
-  const handleUpload = () => {
-    if (selectedFile) {
-      uploadSource.mutate(selectedFile)
+  const resetSelectedFile = () => {
+    setSelectedFile(undefined)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
     }
+  }
+
+  const uploadSelectedFile = (file: File) => {
+    uploadSource.mutate(file, { onSuccess: resetSelectedFile })
+  }
+
+  const handleFileSelected = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    setSelectedFile(file)
+    if (file) {
+      uploadSelectedFile(file)
+    }
+  }
+
+  const handleUpload = () => {
+    if (!selectedFile) {
+      fileInputRef.current?.click()
+      return
+    }
+    uploadSelectedFile(selectedFile)
   }
 
   const handleCaptureLink = () => {
@@ -116,11 +138,15 @@ export function CapturePanel({ onResponse, onStreamChunk, onStreamStart }: Captu
           <input
             accept=".txt,.md,.pdf"
             id="source-file"
-            onChange={(event) => setSelectedFile(event.target.files?.[0])}
+            onChange={handleFileSelected}
+            ref={fileInputRef}
             type="file"
           />
+          <p className="helper-text">
+            {selectedFile ? `正在上传：${selectedFile.name}` : '支持 TXT、Markdown、PDF。选择文件后会自动上传。'}
+          </p>
           <div className="action-row">
-            <button disabled={isBusy || !selectedFile} onClick={handleUpload} type="button">
+            <button disabled={isBusy} onClick={handleUpload} type="button">
               上传文件
             </button>
           </div>

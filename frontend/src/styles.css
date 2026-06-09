@@ -225,6 +225,13 @@ p {
   font-size: 14px;
 }
 
+.helper-text {
+  color: #66776f;
+  font-size: 13px;
+  line-height: 1.4;
+  margin: -2px 0 0;
+}
+
 .center-panel textarea {
   width: 100%;
   min-height: 160px;

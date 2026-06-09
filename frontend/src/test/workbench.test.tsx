@@ -1,4 +1,4 @@
-import { cleanup, render, screen, within } from '@testing-library/react'
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -671,6 +671,25 @@ describe('Lumen workbench', () => {
     expect(screen.getByText('gpt-test')).toBeInTheDocument()
     expect(screen.getByText('API key 已配置')).toBeInTheDocument()
     expect(screen.getByText('LLM 模式已开启，但模型名称或 API key 未配置。')).toBeInTheDocument()
+  })
+
+  it('starts file upload when a file is selected', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(screen.getByRole('button', { name: '文件' }))
+
+    expect(screen.getByRole('button', { name: '上传文件' })).toBeEnabled()
+
+    const file = new File(['Lumen immediate upload check.'], 'instant-upload.txt', { type: 'text/plain' })
+    await user.upload(screen.getByLabelText('选择资料文件'), file)
+
+    await waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith(
+        'http://127.0.0.1:8000/api/sources/upload',
+        expect.objectContaining({ method: 'POST' }),
+      ),
+    )
   })
 
   it('manages SQLite-backed model provider profiles from settings', async () => {
