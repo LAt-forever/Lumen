@@ -94,6 +94,26 @@ class Memory(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
 
 
+class MemoryRelation(Base):
+    __tablename__ = "memory_relations"
+    __table_args__ = (
+        UniqueConstraint("source_memory_id", "target_memory_id", "relation_type", name="uq_memory_relation_pair_type"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source_memory_id: Mapped[int] = mapped_column(ForeignKey("memories.id"), nullable=False, index=True)
+    target_memory_id: Mapped[int] = mapped_column(ForeignKey("memories.id"), nullable=False, index=True)
+    relation_type: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    provenance: Mapped[str] = mapped_column(Text, nullable=False)
+    strength: Mapped[int] = mapped_column(Integer, default=70, nullable=False)
+    status: Mapped[str] = mapped_column(String(40), default="active", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    source_memory: Mapped[Memory] = relationship(foreign_keys=[source_memory_id])
+    target_memory: Mapped[Memory] = relationship(foreign_keys=[target_memory_id])
+
+
 class Tag(Base):
     __tablename__ = "tags"
     __table_args__ = (UniqueConstraint("normalized_name", name="uq_tags_normalized_name"),)

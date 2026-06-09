@@ -10,6 +10,8 @@ SourceType = Literal["note", "markdown", "text", "pdf", "link"]
 MemoryCandidateStatus = Literal["pending", "confirmed", "ignored", "merged"]
 MemoryStatus = Literal["active", "edited", "forgotten", "merged"]
 MemoryType = Literal["preference", "fact", "project", "relationship", "goal", "event", "note"]
+RelationType = Literal["related_to", "part_of", "caused_by", "supports", "contradicts", "merged_into"]
+RelationStatus = Literal["active", "forgotten"]
 AnswerMode = Literal["extractive", "llm"]
 ProviderProfileStatus = Literal["untested", "ready", "failed"]
 TargetType = Literal["source", "memory", "message"]
@@ -121,6 +123,49 @@ class MemoryUpdate(BaseModel):
 
 class MemoryMerge(BaseModel):
     target_memory_id: int
+
+
+class MemoryRelationCreate(BaseModel):
+    target_memory_id: int
+    relation_type: RelationType
+    provenance: str = "user"
+    strength: int = Field(default=70, ge=0, le=100)
+
+
+class MemoryRelationRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    source_memory_id: int
+    target_memory_id: int
+    relation_type: str
+    provenance: str
+    strength: int
+    status: str
+    created_at: datetime
+
+
+class MemoryGraphNode(BaseModel):
+    id: int
+    text: str
+    memory_type: str
+    status: str
+
+
+class MemoryGraphEdge(BaseModel):
+    id: int
+    source_memory_id: int
+    target_memory_id: int
+    relation_type: str
+    provenance: str
+    strength: int
+    status: str
+
+
+class MemoryGraphRead(BaseModel):
+    center_memory_id: int
+    nodes: list[MemoryGraphNode]
+    edges: list[MemoryGraphEdge]
 
 
 class TagRead(BaseModel):
