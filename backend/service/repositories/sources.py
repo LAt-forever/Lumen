@@ -56,6 +56,24 @@ class SourceRepository:
         self.db.refresh(source)
         return source
 
+    def update_title(self, source_id: int, title: str) -> Source:
+        source = self.db.get(Source, source_id)
+        if source is None:
+            raise ValueError(f"source {source_id} not found")
+        source.title = title
+        self.db.commit()
+        self.db.refresh(source)
+        return source
+
+    def update_filename(self, source_id: int, filename: str) -> Source:
+        source = self.db.get(Source, source_id)
+        if source is None:
+            raise ValueError(f"source {source_id} not found")
+        source.filename = filename
+        self.db.commit()
+        self.db.refresh(source)
+        return source
+
     def delete(self, source_id: int) -> None:
         source = self.db.get(Source, source_id)
         if source is None:

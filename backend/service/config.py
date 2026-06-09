@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     llm_timeout_seconds: float = 30.0
     llm_fallback_enabled: bool = True
     embedding_mode: str = "hash"
+    upload_storage_path: str = "data/uploads"
+    tesseract_cmd: str | None = None
+    playwright_enabled: bool = True
 
     model_config = SettingsConfigDict(env_prefix="LUMEN_", env_file=".env", extra="ignore")
 
