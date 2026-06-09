@@ -26,6 +26,9 @@ class ConversationRepository:
         self.db.refresh(message)
         return message
 
+    def get_message(self, message_id: int) -> Message | None:
+        return self.db.get(Message, message_id)
+
     def add_citation(self, message_id: int, source_id: int, chunk_id: int, quote: str) -> Citation:
         citation = Citation(message_id=message_id, source_id=source_id, chunk_id=chunk_id, quote=quote)
         self.db.add(citation)

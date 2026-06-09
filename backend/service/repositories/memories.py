@@ -50,6 +50,10 @@ class MemoryRepository:
     def get(self, memory_id: int) -> Memory | None:
         return self.db.get(Memory, memory_id)
 
+    def exists_active(self, memory_id: int) -> bool:
+        memory = self.db.get(Memory, memory_id)
+        return memory is not None and memory.status in ["active", "edited"]
+
     def active_memories(self) -> list[Memory]:
         stmt = select(Memory).where(Memory.status.in_(["active", "edited"])).order_by(Memory.updated_at.desc(), Memory.id.desc())
         return list(self.db.scalars(stmt))

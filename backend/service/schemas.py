@@ -10,6 +10,9 @@ MemoryStatus = Literal["active", "edited", "forgotten", "merged"]
 MemoryType = Literal["preference", "fact", "project", "relationship", "goal", "event", "note"]
 AnswerMode = Literal["extractive", "llm"]
 ProviderProfileStatus = Literal["untested", "ready", "failed"]
+TargetType = Literal["source", "memory", "message"]
+TagAssignmentSource = Literal["user", "ai-confirmed"]
+TagSuggestionStatus = Literal["pending", "confirmed", "ignored"]
 
 
 class SourceCreate(BaseModel):
@@ -115,6 +118,64 @@ class MemoryUpdate(BaseModel):
 
 class MemoryMerge(BaseModel):
     target_memory_id: int
+
+
+class TagRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    color: str | None
+    created_at: datetime
+
+
+class TagCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    color: str | None = Field(default=None, max_length=40)
+
+
+class TagAssignmentCreate(BaseModel):
+    tag_id: int
+    target_type: TargetType
+    target_id: int
+
+
+class TagAssignmentRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    tag: TagRead
+    target_type: TargetType
+    target_id: int
+    source: TagAssignmentSource
+    created_at: datetime
+
+
+class TagSuggestionRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    label: str
+    target_type: TargetType
+    target_id: int
+    reason: str
+    confidence: int
+    status: TagSuggestionStatus
+    created_at: datetime
+
+
+class FavoriteCreate(BaseModel):
+    target_type: TargetType
+    target_id: int
+
+
+class FavoriteRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    target_type: TargetType
+    target_id: int
+    created_at: datetime
 
 
 class MemoryDuplicateSuggestionRead(BaseModel):

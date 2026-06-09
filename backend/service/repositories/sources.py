@@ -19,6 +19,9 @@ class SourceRepository:
     def get(self, source_id: int) -> Source | None:
         return self.db.get(Source, source_id)
 
+    def exists(self, source_id: int) -> bool:
+        return self.db.get(Source, source_id) is not None
+
     def list(self) -> list[Source]:
         return list(self.db.scalars(select(Source).order_by(Source.created_at.desc(), Source.id.desc())))
 
