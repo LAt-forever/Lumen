@@ -1,7 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from service.models import Memory, MemoryCandidate
+from service.models import Memory, MemoryCandidate, MemoryRelation
 
 
 class MemoryRepository:
@@ -58,6 +58,70 @@ class MemoryRepository:
         stmt = select(Memory).where(Memory.status.in_(["active", "edited"])).order_by(Memory.updated_at.desc(), Memory.id.desc())
         return list(self.db.scalars(stmt))
 
+    def create_relation(
+        self,
+        source_memory_id: int,
+        target_memory_id: int,
+        relation_type: str,
+        provenance: str,
+        strength: int,
+    ) -> MemoryRelation:
+        if source_memory_id == target_memory_id:
+            raise ValueError("source and target memories must be different")
+        source = self.db.get(Memory, source_memory_id)
+        target = self.db.get(Memory, target_memory_id)
+        if source is None or target is None:
+            raise ValueError("memory not found")
+        if source.status not in ["active", "edited"] or target.status not in ["active", "edited"]:
+            raise ValueError("both memories must be active or edited")
+        existing = self.db.scalar(
+            select(MemoryRelation).where(
+                MemoryRelation.source_memory_id == source_memory_id,
+                MemoryRelation.target_memory_id == target_memory_id,
+                MemoryRelation.relation_type == relation_type,
+            )
+        )
+        if existing is not None:
+            raise ValueError("relation already exists")
+        relation = MemoryRelation(
+            source_memory_id=source_memory_id,
+            target_memory_id=target_memory_id,
+            relation_type=relation_type,
+            provenance=provenance,
+            strength=strength,
+        )
+        self.db.add(relation)
+        self.db.commit()
+        self.db.refresh(relation)
+        return relation
+
+    def get_relation(self, relation_id: int) -> MemoryRelation | None:
+        return self.db.get(MemoryRelation, relation_id)
+
+    def list_relations_for_memory(self, memory_id: int) -> list[MemoryRelation]:
+        stmt = (
+            select(MemoryRelation)
+            .where(
+                (MemoryRelation.source_memory_id == memory_id) | (MemoryRelation.target_memory_id == memory_id),
+                MemoryRelation.status == "active",
+            )
+            .order_by(MemoryRelation.created_at.desc(), MemoryRelation.id.desc())
+        )
+        return list(self.db.scalars(stmt))
+
+    def list_active_relations(self) -> list[MemoryRelation]:
+        stmt = select(MemoryRelation).where(MemoryRelation.status == "active").order_by(MemoryRelation.id.asc())
+        return list(self.db.scalars(stmt))
+
+    def forget_relation(self, relation_id: int) -> MemoryRelation:
+        relation = self.db.get(MemoryRelation, relation_id)
+        if relation is None:
+            raise ValueError(f"relation {relation_id} not found")
+        relation.status = "forgotten"
+        self.db.commit()
+        self.db.refresh(relation)
+        return relation
+
     def list_active_for_search(self) -> list[Memory]:
         stmt = select(Memory).where(Memory.status.in_(["active", "edited"])).order_by(Memory.id.asc())
         return list(self.db.scalars(stmt))
@@ -97,6 +161,14 @@ class MemoryRepository:
             target.text = f"{target.text.rstrip()} {source.text.strip()}"
         target.status = "edited"
         source.status = "merged"
+        merged_relation = MemoryRelation(
+            source_memory_id=source_memory_id,
+            target_memory_id=target_memory_id,
+            relation_type="merged_into",
+            provenance="system:merge",
+            strength=100,
+        )
+        self.db.add(merged_relation)
         self.db.commit()
         self.db.refresh(target)
         return target

@@ -122,6 +122,23 @@ def test_duplicate_memory_suggestions_endpoint(client):
     assert suggestions[0]["overlap_score"] >= 0.6
 
 
+def test_merge_creates_merged_into_relation():
+    service = make_service()
+    first = service.extract_candidates("我正在做 Lumen 这个个人 AI 知识库项目。", source_kind="message", source_ref="1")[0]
+    second = service.extract_candidates("我喜欢用中文记录项目目标。", source_kind="message", source_ref="2")[0]
+    target = service.confirm(first.id)
+    source = service.confirm(second.id)
+
+    service.merge(source.id, target_memory_id=target.id)
+
+    relations = service.memories.list_relations_for_memory(source.id)
+    assert len(relations) == 1
+    assert relations[0].relation_type == "merged_into"
+    assert relations[0].target_memory_id == target.id
+    assert relations[0].strength == 100
+    assert relations[0].provenance == "system:merge"
+
+
 def test_search_blank_query_returns_no_memories():
     service = make_service()
     candidate = service.extract_candidates("我喜欢引用清楚的回答。", source_kind="message", source_ref="1")[0]
