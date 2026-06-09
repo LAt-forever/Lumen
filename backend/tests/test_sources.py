@@ -44,18 +44,19 @@ def test_source_failed_status_keeps_error_message():
 def test_upload_text_file_can_be_indexed_and_searched(client):
     response = client.post(
         "/api/sources/upload",
-        files={"file": ("notes.txt", b"Lumen file upload should become searchable.", "text/plain")},
+        files=[("files", ("notes.txt", b"Lumen file upload should become searchable.", "text/plain"))],
     )
 
     assert response.status_code == 200
-    source = response.json()
+    result = response.json()
+    assert result["total"] == 1
+    assert result["succeeded"] == 1
+    assert result["failed"] == 0
+    assert len(result["sources"]) == 1
+    source = result["sources"][0]
     assert source["title"] == "notes.txt"
     assert source["source_type"] == "text"
-    assert source["status"] == "pending"
-
-    index_response = client.post(f"/api/sources/{source['id']}/index")
-    assert index_response.status_code == 200
-    assert index_response.json()["status"] == "indexed"
+    assert source["status"] == "indexed"
 
     search_response = client.get("/api/search", params={"q": "file upload searchable"})
     assert search_response.status_code == 200
@@ -100,11 +101,16 @@ def test_delete_missing_source_returns_404(client):
 def test_upload_unsupported_file_creates_failed_source(client):
     response = client.post(
         "/api/sources/upload",
-        files={"file": ("archive.zip", b"not text", "application/zip")},
+        files=[("files", ("archive.zip", b"not text", "application/zip"))],
     )
 
     assert response.status_code == 200
-    source = response.json()
+    result = response.json()
+    assert result["total"] == 1
+    assert result["succeeded"] == 0
+    assert result["failed"] == 1
+    assert len(result["sources"]) == 1
+    source = result["sources"][0]
     assert source["title"] == "archive.zip"
     assert source["status"] == "failed"
     assert "Unsupported file type" in source["error_message"]
