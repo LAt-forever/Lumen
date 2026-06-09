@@ -2,7 +2,12 @@ import re
 
 from service.models import Memory, MemoryCandidate
 from service.repositories.memories import MemoryRepository
-from service.schemas import MemoryDuplicateSuggestionRead
+from service.schemas import (
+    MemoryDuplicateSuggestionRead,
+    MemoryGraphEdge,
+    MemoryGraphNode,
+    MemoryGraphRead,
+)
 
 
 _LATIN_TERM_RE = re.compile(r"[a-z0-9]+")
@@ -84,6 +89,100 @@ class MemoryService:
                 )
         suggestions.sort(key=lambda item: (-item.overlap_score, item.source_memory_id, item.target_memory_id))
         return suggestions
+
+    def create_relation(
+        self,
+        source_memory_id: int,
+        target_memory_id: int,
+        relation_type: str,
+        provenance: str = "user",
+        strength: int = 70,
+    ):
+        return self.memories.create_relation(
+            source_memory_id=source_memory_id,
+            target_memory_id=target_memory_id,
+            relation_type=relation_type,
+            provenance=provenance,
+            strength=strength,
+        )
+
+    def forget_relation(self, relation_id: int):
+        return self.memories.forget_relation(relation_id)
+
+    def get_memory_relations(self, memory_id: int):
+        return self.memories.list_relations_for_memory(memory_id)
+
+    def build_memory_graph(
+        self,
+        center_memory_id: int,
+        depth: int = 2,
+        max_nodes: int = 50,
+    ) -> MemoryGraphRead:
+        center = self.memories.get(center_memory_id)
+        if center is None:
+            raise ValueError(f"memory {center_memory_id} not found")
+
+        active_statuses = {"active", "edited"}
+        nodes: dict[int, MemoryGraphNode] = {}
+        edges: dict[int, MemoryGraphEdge] = {}
+        visited: set[int] = set()
+        queue: list[tuple[int, int]] = [(center_memory_id, 0)]
+
+        while queue and len(nodes) < max_nodes:
+            current_id, current_depth = queue.pop(0)
+            if current_id in visited:
+                continue
+            visited.add(current_id)
+
+            memory = self.memories.get(current_id)
+            if memory is None or memory.status not in active_statuses:
+                continue
+
+            nodes[current_id] = MemoryGraphNode(
+                id=memory.id,
+                text=memory.text,
+                memory_type=memory.memory_type,
+                status=memory.status,
+            )
+
+            if current_depth >= depth:
+                continue
+
+            relations = self.memories.list_relations_for_memory(current_id)
+            for relation in relations:
+                if relation.status != "active":
+                    continue
+                other_id = relation.target_memory_id if relation.source_memory_id == current_id else relation.source_memory_id
+                other = self.memories.get(other_id)
+                if other is None or other.status not in active_statuses:
+                    continue
+                if relation.id not in edges:
+                    edges[relation.id] = MemoryGraphEdge(
+                        id=relation.id,
+                        source_memory_id=relation.source_memory_id,
+                        target_memory_id=relation.target_memory_id,
+                        relation_type=relation.relation_type,
+                        provenance=relation.provenance,
+                        strength=relation.strength,
+                        status=relation.status,
+                    )
+                if other_id not in visited:
+                    queue.append((other_id, current_depth + 1))
+
+        return MemoryGraphRead(
+            center_memory_id=center_memory_id,
+            nodes=list(nodes.values()),
+            edges=list(edges.values()),
+        )
+
+    def promote_duplicate_to_related(self, source_memory_id: int, target_memory_id: int):
+        return self.memories.create_relation(
+            source_memory_id=source_memory_id,
+            target_memory_id=target_memory_id,
+            relation_type="related_to",
+            provenance="system:duplicate-suggestion",
+            strength=80,
+        )
 
     def _classify(self, text: str, lowered: str) -> str | None:
         if any(marker in text for marker in ["正在做", "项目", "project"]):
