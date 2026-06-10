@@ -1,56 +1,75 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
-import { useCreateMemoryRelation, useForgetMemoryRelation, useMemories, useMemoryGraph, useMemoryRelations } from '../api/hooks'
-import type { MemoryRelationCreate, RelationType } from '../api/types'
-import { formatMemoryType } from '../i18n'
-import { MemoryGraph } from './MemoryGraph'
+import { api } from '../api/client'
+import { useHubGraph, useMemories } from '../api/hooks'
+import type { MemoryGraphRead } from '../api/types'
+import { applyFilters, type GraphFilters } from '../graph/filterGraph'
+import { collapseNode, mergeGraphs } from '../graph/mergeGraph'
+import { ALL_MEMORY_TYPES, ALL_RELATION_TYPES, GraphFilterPanel } from './GraphFilterPanel'
+import { GraphToolbar } from './GraphToolbar'
+import { MemoryGraphCanvas } from './MemoryGraphCanvas'
 
-const relationTypes: RelationType[] = ['related_to', 'part_of', 'caused_by', 'supports', 'contradicts']
-
-const relationLabels: Record<string, string> = {
-  related_to: '相关',
-  part_of: '属于',
-  caused_by: '导致',
-  supports: '支持',
-  contradicts: '矛盾',
-}
+const EMPTY_GRAPH: MemoryGraphRead = { center_memory_id: 0, nodes: [], edges: [] }
+const MAX_VISIBLE_NODES = 200
 
 export function MemoryGraphPanel() {
   const { data: memories = [] } = useMemories()
-  const [centerId, setCenterId] = useState<number | undefined>(memories[0]?.id)
-  const [depth, setDepth] = useState<1 | 2 | 3>(2)
-  const { data: graph } = useMemoryGraph(centerId, depth)
-  const { data: relations = [] } = useMemoryRelations(centerId)
-  const createRelation = useCreateMemoryRelation()
-  const forgetRelation = useForgetMemoryRelation()
+  const { data: hubGraph, isLoading, isError, refetch } = useHubGraph(5)
 
-  const [targetId, setTargetId] = useState<number | undefined>(undefined)
-  const [relationType, setRelationType] = useState<RelationType>('related_to')
-  const [strength, setStrength] = useState<number>(70)
+  const [graph, setGraph] = useState<MemoryGraphRead>(EMPTY_GRAPH)
+  const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set())
+  const [selectedId, setSelectedId] = useState<number | null>(null)
+  const [positions, setPositions] = useState<Record<number, { x: number; y: number }>>({})
+  const [filters, setFilters] = useState<GraphFilters>({
+    memoryTypes: new Set(ALL_MEMORY_TYPES),
+    relationTypes: new Set(ALL_RELATION_TYPES),
+    minStrength: 0,
+  })
 
-  const eligibleTargets = useMemo(
-    () => memories.filter((memory) => memory.id !== centerId),
-    [memories, centerId],
-  )
-
-  const handleAddRelation = () => {
-    if (centerId == null || targetId == null) return
-    const payload: MemoryRelationCreate = {
-      target_memory_id: targetId,
-      relation_type: relationType,
-      provenance: 'user',
-      strength,
+  useEffect(() => {
+    if (hubGraph) {
+      setGraph(hubGraph)
     }
-    createRelation.mutate(
-      { memoryId: centerId, payload },
-      {
-        onSuccess: () => {
-          setTargetId(undefined)
-          setStrength(70)
-        },
-      },
-    )
+  }, [hubGraph])
+
+  const visibleGraph = useMemo(() => applyFilters(graph, filters), [graph, filters])
+
+  const expandNode = async (id: number) => {
+    try {
+      const neighbors = await api.memoryGraph(id, 1)
+      setGraph((prev) => mergeGraphs(prev, neighbors))
+      setExpandedIds((prev) => new Set(prev).add(id))
+    } catch {
+      // 展开失败不破坏已有图
+    }
   }
+
+  const handleNodeDoubleClick = (id: number) => {
+    if (expandedIds.has(id)) {
+      setGraph((prev) => collapseNode(prev, id, expandedIds))
+      setExpandedIds((prev) => {
+        const next = new Set(prev)
+        next.delete(id)
+        return next
+      })
+    } else {
+      void expandNode(id)
+    }
+  }
+
+  const handleJumpToMemory = (id: number) => {
+    void expandNode(id)
+    setSelectedId(id)
+  }
+
+  const handleReset = () => {
+    setGraph(hubGraph ?? EMPTY_GRAPH)
+    setExpandedIds(new Set())
+    setSelectedId(null)
+    setPositions({})
+  }
+
+  const selectedMemory = memories.find((m) => m.id === selectedId)
 
   return (
     <section className="center-panel full-span" aria-label="记忆图谱">
@@ -58,97 +77,42 @@ export function MemoryGraphPanel() {
         <h2>记忆图谱</h2>
       </div>
 
-      <div className="graph-controls">
-        <label className="field-label" htmlFor="center-memory">
-          中心记忆
-        </label>
-        <select id="center-memory" value={centerId ?? ''} onChange={(event) => setCenterId(Number(event.target.value))}>
-          {memories.map((memory) => (
-            <option key={memory.id} value={memory.id}>
-              #{memory.id} {formatMemoryType(memory.memory_type)} · {memory.text.slice(0, 40)}
-            </option>
-          ))}
-        </select>
+      <GraphToolbar memories={memories} onJumpToMemory={handleJumpToMemory} onReset={handleReset} />
+      <GraphFilterPanel filters={filters} onChange={setFilters} />
 
-        <label className="field-label" htmlFor="graph-depth">
-          探索深度
-        </label>
-        <select
-          id="graph-depth"
-          value={depth}
-          onChange={(event) => setDepth(Number(event.target.value) as 1 | 2 | 3)}
-        >
-          <option value={1}>1 层</option>
-          <option value={2}>2 层</option>
-          <option value={3}>3 层</option>
-        </select>
-      </div>
-
-      {graph ? (
-        <MemoryGraph graph={graph} width={800} height={420} onSelectNode={(id) => setCenterId(id)} />
+      {isError ? (
+        <div className="graph-error">
+          <p>加载图谱失败。</p>
+          <button type="button" onClick={() => refetch()}>
+            重试
+          </button>
+        </div>
+      ) : isLoading ? (
+        <p>正在加载图谱…</p>
+      ) : graph.nodes.length === 0 ? (
+        <p>还没有记忆，去添加一些资料吧。</p>
       ) : (
-        <p>请选择一条记忆作为图谱中心。</p>
+        <>
+          {visibleGraph.nodes.length > MAX_VISIBLE_NODES ? (
+            <p className="helper-text">节点过多（{visibleGraph.nodes.length}），建议用过滤器收窄范围。</p>
+          ) : null}
+          <MemoryGraphCanvas
+            graph={visibleGraph}
+            expandedIds={expandedIds}
+            selectedId={selectedId}
+            prevPositions={positions}
+            onNodeClick={setSelectedId}
+            onNodeDoubleClick={handleNodeDoubleClick}
+            onPositionsComputed={setPositions}
+          />
+        </>
       )}
 
-      {centerId != null ? (
-        <div className="graph-relation-editor">
-          <h3>添加关系</h3>
-          <div className="inline-fields">
-            <select value={targetId ?? ''} onChange={(event) => setTargetId(Number(event.target.value))}>
-              <option value="">选择目标记忆</option>
-              {eligibleTargets.map((memory) => (
-                <option key={memory.id} value={memory.id}>
-                  #{memory.id} {memory.text.slice(0, 40)}
-                </option>
-              ))}
-            </select>
-            <select value={relationType} onChange={(event) => setRelationType(event.target.value as RelationType)}>
-              {relationTypes.map((type) => (
-                <option key={type} value={type}>
-                  {relationLabels[type]}
-                </option>
-              ))}
-            </select>
-          </div>
-          <label className="field-label" htmlFor="relation-strength">
-            强度: {strength}
-          </label>
-          <input
-            id="relation-strength"
-            type="range"
-            min={0}
-            max={100}
-            value={strength}
-            onChange={(event) => setStrength(Number(event.target.value))}
-          />
-          <div className="memory-actions">
-            <button disabled={targetId == null || createRelation.isPending} onClick={handleAddRelation} type="button">
-              添加关系
-            </button>
-          </div>
-
-          {relations.length > 0 ? (
-            <>
-              <h3>当前关系</h3>
-              <ul className="plain-list">
-                {relations.map((relation) => (
-                  <li key={relation.id}>
-                    {relation.source_memory_id === centerId ? '→' : '←'} #
-                    {relation.source_memory_id === centerId ? relation.target_memory_id : relation.source_memory_id}{' '}
-                    {relationLabels[relation.relation_type] ?? relation.relation_type} · 强度 {relation.strength}
-                    <button
-                      disabled={forgetRelation.isPending}
-                      onClick={() => forgetRelation.mutate({ memoryId: centerId, relationId: relation.id })}
-                      type="button"
-                      className="secondary"
-                    >
-                      遗忘
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </>
-          ) : null}
+      {selectedMemory ? (
+        <div className="graph-node-detail">
+          <h3>记忆详情</h3>
+          <p>{selectedMemory.text}</p>
+          <p className="helper-text">类型：{selectedMemory.memory_type}　双击节点可展开/收起关系</p>
         </div>
       ) : null}
     </section>

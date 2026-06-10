@@ -4,6 +4,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import App from '../App'
 
+vi.mock('@xyflow/react', () => ({
+  ReactFlow: () => null,
+  Background: () => null,
+  Controls: () => null,
+  MiniMap: () => null,
+  Handle: () => null,
+  Position: { Top: 'top', Bottom: 'bottom' },
+}))
+
 function jsonResponse(body: unknown) {
   return Promise.resolve({
     ok: true,
@@ -889,6 +898,6 @@ describe('Lumen workbench', () => {
 
     await user.click(screen.getByRole('button', { name: '图谱' }))
     expect(await screen.findByText('记忆图谱')).toBeInTheDocument()
-    expect(screen.getByLabelText('中心记忆')).toBeInTheDocument()
+    expect(screen.getByLabelText('跳转到记忆')).toBeInTheDocument()
   })
 })
