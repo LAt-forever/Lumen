@@ -1,5 +1,6 @@
 import io
 import os
+import shutil
 import tempfile
 from pathlib import Path
 
@@ -89,7 +90,24 @@ async def test_parse_real_text_pdf(parser, tmp_path: Path, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_parse_empty_pdf_raises(parser, tmp_path: Path, monkeypatch):
-    """Test that a PDF with no text and no OCR raises ValueError."""
+    """Test that a PDF with no text and no OCR raises ValueError.
+
+    When OCR dependencies (fitz/pytesseract + the tesseract binary) are
+    available, parsing falls through to the OCR path. Without a real tesseract
+    binary installed, ``image_to_string`` raises a non-ValueError at runtime, so
+    skip gracefully in that environment (mirrors the OCR-dependency skips in
+    test_image_parser.py).
+    """
+    from service.core.parsers import pdf_parser as pdf_mod
+
+    if (
+        pdf_mod.fitz is not None
+        and pdf_mod.pytesseract is not None
+        and pdf_mod.Image is not None
+        and shutil.which("tesseract") is None
+    ):
+        pytest.skip("tesseract binary not available for OCR path")
+
     from service.core import storage
     monkeypatch.setattr(storage, "UPLOAD_ROOT", tmp_path)
 

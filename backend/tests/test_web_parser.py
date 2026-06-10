@@ -19,7 +19,7 @@ def parser():
 
 
 def test_supported_types(parser):
-    assert parser.supported_types == frozenset({"link"})
+    assert parser.supported_types == frozenset({"link", "web_crawl"})
 
 
 @pytest.mark.asyncio
