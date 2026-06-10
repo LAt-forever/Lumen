@@ -213,6 +213,9 @@ export const api = {
   memoryGraph: (memoryId: number, depth = 2) =>
     request<MemoryGraphRead>(`/api/memories/${memoryId}/graph?depth=${depth}`),
 
+  memoryHubGraph: (limit = 5) =>
+    request<MemoryGraphRead>(`/api/memories/graph/hubs?limit=${limit}`),
+
   promoteDuplicateToRelation: (sourceMemoryId: number, targetMemoryId: number) =>
     request<MemoryRelationRead>(`/api/memories/duplicate-suggestions/${sourceMemoryId}/${targetMemoryId}/relate`, {
       method: 'POST',

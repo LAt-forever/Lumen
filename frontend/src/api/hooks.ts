@@ -430,6 +430,13 @@ export function useMemoryGraph(memoryId?: number, depth = 2) {
   })
 }
 
+export function useHubGraph(limit = 5) {
+  return useQuery<MemoryGraphRead>({
+    queryKey: ['memory-hub-graph', limit],
+    queryFn: () => api.memoryHubGraph(limit),
+  })
+}
+
 export function usePromoteDuplicateToRelation() {
   const queryClient = useQueryClient()
   return useMutation({
