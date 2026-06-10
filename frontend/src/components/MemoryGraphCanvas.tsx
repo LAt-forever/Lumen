@@ -52,8 +52,7 @@ export function MemoryGraphCanvas({
     const positions: Record<number, { x: number; y: number }> = {}
     for (const n of layoutNodes) positions[n.id] = { x: n.x, y: n.y }
     onPositionsComputed(positions)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [layoutNodes])
+  }, [layoutNodes, onPositionsComputed])
 
   const rfNodes: Node[] = layoutNodes.map((n) => ({
     id: String(n.id),
