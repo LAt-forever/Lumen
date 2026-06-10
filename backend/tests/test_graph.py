@@ -77,11 +77,14 @@ def test_hub_graph_returns_top_connected_memories():
     service.create_relation(b.id, c.id, relation_type="related_to")
 
     graph = service.build_hub_graph(limit=2)
-    assert a.id in {n.id for n in graph.nodes}
-    assert len(graph.nodes) == 2
+    node_ids = {n.id for n in graph.nodes}
+    assert node_ids == {a.id, b.id}
+    # the a–b relation must be present as an edge
+    edge_pairs = {(e.source_memory_id, e.target_memory_id) for e in graph.edges}
+    assert (a.id, b.id) in edge_pairs or (b.id, a.id) in edge_pairs
     for edge in graph.edges:
-        assert edge.source_memory_id in {n.id for n in graph.nodes}
-        assert edge.target_memory_id in {n.id for n in graph.nodes}
+        assert edge.source_memory_id in node_ids
+        assert edge.target_memory_id in node_ids
 
 
 def test_hub_graph_empty_relations_fallback():

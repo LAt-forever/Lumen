@@ -176,7 +176,6 @@ class MemoryService:
         )
 
     def build_hub_graph(self, limit: int = 5) -> MemoryGraphRead:
-        active_statuses = {"active", "edited"}
         hubs = self.memories.top_memories_by_relation_count(limit)
 
         if not hubs:
