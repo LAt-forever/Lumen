@@ -6,7 +6,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 SourceStatus = Literal["pending", "parsing", "indexed", "failed"]
-SourceType = Literal["note", "markdown", "text", "pdf", "link", "bookmark", "web_crawl"]
+SourceType = Literal["note", "markdown", "text", "pdf", "link", "image", "docx", "epub", "bookmark", "web_crawl"]
 MemoryCandidateStatus = Literal["pending", "confirmed", "ignored", "merged"]
 MemoryStatus = Literal["active", "edited", "forgotten", "merged"]
 MemoryType = Literal["preference", "fact", "project", "relationship", "goal", "event", "note"]

@@ -1,5 +1,6 @@
 from pypdf import PdfReader
 
+from service.core.parsers import register_parser
 from service.core.parsers.base import ParseResult
 from service.core.storage import resolve_file_path
 
@@ -61,3 +62,6 @@ class PdfParser:
             doc.close()
 
         return "\n\n".join(ocr_pages)
+
+
+register_parser(PdfParser())

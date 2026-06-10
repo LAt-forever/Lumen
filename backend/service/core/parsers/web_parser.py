@@ -14,11 +14,10 @@ except ImportError:
 
 
 class WebParser:
-    supported_types = frozenset({"link"})
+    supported_types = frozenset({"link", "web_crawl"})
 
     async def parse(self, source, **kwargs) -> ParseResult:
-        mode = kwargs.get("mode", "link")
-        if mode == "crawl":
+        if source.source_type == "web_crawl":
             return await self._parse_crawl(source, **kwargs)
         return await self._parse_link(source, **kwargs)
 
