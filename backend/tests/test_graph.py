@@ -62,3 +62,57 @@ def test_graph_returns_empty_for_isolated_memory():
     assert graph.center_memory_id == memory.id
     assert len(graph.nodes) == 1
     assert graph.edges == []
+
+
+def test_hub_graph_returns_top_connected_memories():
+    service = make_service()
+    candidates = [
+        service.extract_candidates(f"我喜欢 memory {i}。", source_kind="message", source_ref=str(i))[0]
+        for i in range(4)
+    ]
+    a, b, c, d = [service.confirm(x.id) for x in candidates]
+    service.create_relation(a.id, b.id, relation_type="related_to")
+    service.create_relation(a.id, c.id, relation_type="related_to")
+    service.create_relation(a.id, d.id, relation_type="related_to")
+    service.create_relation(b.id, c.id, relation_type="related_to")
+
+    graph = service.build_hub_graph(limit=2)
+    assert a.id in {n.id for n in graph.nodes}
+    assert len(graph.nodes) == 2
+    for edge in graph.edges:
+        assert edge.source_memory_id in {n.id for n in graph.nodes}
+        assert edge.target_memory_id in {n.id for n in graph.nodes}
+
+
+def test_hub_graph_empty_relations_fallback():
+    service = make_service()
+    candidates = [
+        service.extract_candidates(f"我喜欢 孤立记忆 {i}。", source_kind="message", source_ref=str(i))[0]
+        for i in range(3)
+    ]
+    [service.confirm(x.id) for x in candidates]
+    graph = service.build_hub_graph(limit=5)
+    assert len(graph.nodes) == 3
+    assert len(graph.edges) == 0
+
+
+def test_hub_graph_excludes_forgotten():
+    service = make_service()
+    candidates = [
+        service.extract_candidates(f"我喜欢 记忆 {i}。", source_kind="message", source_ref=str(i))[0]
+        for i in range(3)
+    ]
+    a, b, c = [service.confirm(x.id) for x in candidates]
+    service.create_relation(a.id, b.id, relation_type="related_to")
+    service.create_relation(a.id, c.id, relation_type="related_to")
+    service.forget(a.id)
+    graph = service.build_hub_graph(limit=5)
+    assert a.id not in {n.id for n in graph.nodes}
+
+
+def test_hub_graph_endpoint_empty(client):
+    response = client.get("/api/memories/graph/hubs?limit=5")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["nodes"] == []
+    assert data["edges"] == []

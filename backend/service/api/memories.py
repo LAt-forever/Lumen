@@ -56,6 +56,12 @@ def duplicate_suggestions(db: Session = Depends(get_db)):
     return MemoryService(MemoryRepository(db)).duplicate_suggestions()
 
 
+@router.get("/graph/hubs", response_model=MemoryGraphRead)
+def memory_hub_graph(limit: int = 5, db: Session = Depends(get_db)):
+    service = MemoryService(MemoryRepository(db))
+    return service.build_hub_graph(limit=limit)
+
+
 @router.patch("/{memory_id}", response_model=MemoryRead)
 def update_memory(memory_id: int, data: MemoryUpdate, db: Session = Depends(get_db)):
     service = MemoryService(MemoryRepository(db))

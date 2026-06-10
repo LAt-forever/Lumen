@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from service.models import Memory, MemoryCandidate, MemoryRelation
@@ -112,6 +112,41 @@ class MemoryRepository:
     def list_active_relations(self) -> list[MemoryRelation]:
         stmt = select(MemoryRelation).where(MemoryRelation.status == "active").order_by(MemoryRelation.id.asc())
         return list(self.db.scalars(stmt))
+
+    def top_memories_by_relation_count(self, limit: int) -> list[Memory]:
+        active_statuses = ("active", "edited")
+        rel = MemoryRelation
+        endpoint_ids = (
+            select(rel.source_memory_id.label("mid"))
+            .where(rel.status == "active")
+            .union_all(
+                select(rel.target_memory_id.label("mid")).where(rel.status == "active")
+            )
+            .subquery()
+        )
+        counts = (
+            select(endpoint_ids.c.mid, func.count().label("deg"))
+            .group_by(endpoint_ids.c.mid)
+            .subquery()
+        )
+        stmt = (
+            select(Memory)
+            .join(counts, counts.c.mid == Memory.id)
+            .where(Memory.status.in_(active_statuses))
+            .order_by(counts.c.deg.desc(), Memory.id.asc())
+            .limit(limit)
+        )
+        return list(self.db.scalars(stmt).all())
+
+    def recent_active_memories(self, limit: int) -> list[Memory]:
+        active_statuses = ("active", "edited")
+        stmt = (
+            select(Memory)
+            .where(Memory.status.in_(active_statuses))
+            .order_by(Memory.created_at.desc(), Memory.id.desc())
+            .limit(limit)
+        )
+        return list(self.db.scalars(stmt).all())
 
     def forget_relation(self, relation_id: int) -> MemoryRelation:
         relation = self.db.get(MemoryRelation, relation_id)

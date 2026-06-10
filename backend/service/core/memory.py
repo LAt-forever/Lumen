@@ -175,6 +175,48 @@ class MemoryService:
             edges=list(edges.values()),
         )
 
+    def build_hub_graph(self, limit: int = 5) -> MemoryGraphRead:
+        active_statuses = {"active", "edited"}
+        hubs = self.memories.top_memories_by_relation_count(limit)
+
+        if not hubs:
+            recent = self.memories.recent_active_memories(limit)
+            nodes = [
+                MemoryGraphNode(id=m.id, text=m.text, memory_type=m.memory_type, status=m.status)
+                for m in recent
+            ]
+            center_id = nodes[0].id if nodes else 0
+            return MemoryGraphRead(center_memory_id=center_id, nodes=nodes, edges=[])
+
+        hub_ids = {m.id for m in hubs}
+        nodes = [
+            MemoryGraphNode(id=m.id, text=m.text, memory_type=m.memory_type, status=m.status)
+            for m in hubs
+        ]
+
+        edges: dict[int, MemoryGraphEdge] = {}
+        for hub_id in hub_ids:
+            for relation in self.memories.list_relations_for_memory(hub_id):
+                if relation.status != "active":
+                    continue
+                if relation.source_memory_id in hub_ids and relation.target_memory_id in hub_ids:
+                    if relation.id not in edges:
+                        edges[relation.id] = MemoryGraphEdge(
+                            id=relation.id,
+                            source_memory_id=relation.source_memory_id,
+                            target_memory_id=relation.target_memory_id,
+                            relation_type=relation.relation_type,
+                            provenance=relation.provenance,
+                            strength=relation.strength,
+                            status=relation.status,
+                        )
+
+        return MemoryGraphRead(
+            center_memory_id=hubs[0].id,
+            nodes=nodes,
+            edges=list(edges.values()),
+        )
+
     def promote_duplicate_to_related(self, source_memory_id: int, target_memory_id: int):
         return self.memories.create_relation(
             source_memory_id=source_memory_id,
