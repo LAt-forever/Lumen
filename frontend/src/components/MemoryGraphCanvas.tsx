@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import {
   Background,
   Controls,
@@ -37,18 +37,23 @@ export function MemoryGraphCanvas({
   onNodeDoubleClick,
   onPositionsComputed,
 }: Props) {
-  const layoutNodes = useMemo(() => {
-    const result = computeLayout(graph.nodes, graph.edges, {
-      width: WIDTH,
-      height: HEIGHT,
-      initialPositions: prevPositions,
-    })
-    const positions: Record<number, { x: number; y: number }> = {}
-    for (const n of result) positions[n.id] = { x: n.x, y: n.y }
-    onPositionsComputed(positions)
-    return result
+  const layoutNodes = useMemo(
+    () =>
+      computeLayout(graph.nodes, graph.edges, {
+        width: WIDTH,
+        height: HEIGHT,
+        initialPositions: prevPositions,
+      }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [graph])
+    [graph],
+  )
+
+  useEffect(() => {
+    const positions: Record<number, { x: number; y: number }> = {}
+    for (const n of layoutNodes) positions[n.id] = { x: n.x, y: n.y }
+    onPositionsComputed(positions)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layoutNodes])
 
   const rfNodes: Node[] = layoutNodes.map((n) => ({
     id: String(n.id),
