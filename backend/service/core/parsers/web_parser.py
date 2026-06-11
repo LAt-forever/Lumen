@@ -1,3 +1,7 @@
+import logging
+from collections import deque
+from urllib.parse import urldefrag, urlparse
+
 import httpx
 from bs4 import BeautifulSoup
 
@@ -11,6 +15,8 @@ try:
 except ImportError:
     PLAYWRIGHT_AVAILABLE = False
     async_playwright = None  # type: ignore[misc,assignment]
+
+logger = logging.getLogger(__name__)
 
 
 class WebParser:
@@ -38,6 +44,14 @@ class WebParser:
 
         return ParseResult(text=text, title=title)
 
+    def _normalize_url(self, url: str) -> str:
+        """Strip fragment and normalize trailing slash for deduplication."""
+        clean, _ = urldefrag(url)
+        parsed = urlparse(clean)
+        # Normalize path trailing slash for dedup (e.g. /page and /page/)
+        path = parsed.path.rstrip("/") or "/"
+        return f"{parsed.scheme}://{parsed.netloc}{path}"
+
     async def _parse_crawl(self, source, **kwargs) -> ParseResult:
         if not PLAYWRIGHT_AVAILABLE or async_playwright is None:
             return await self._parse_link(source, **kwargs)
@@ -50,24 +64,24 @@ class WebParser:
         max_pages = max(1, min(50, kwargs.get("max_pages", 10)))
         same_domain_only = kwargs.get("same_domain_only", True)
 
-        from urllib.parse import urlparse
-
         start_parsed = urlparse(start_url)
         start_domain = start_parsed.netloc
 
         visited: set[str] = set()
         pages: list[dict] = []
-        queue: list[tuple[str, int]] = [(start_url, 0)]
+        queue: deque[tuple[str, int]] = deque([(start_url, 0)])
 
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
             try:
                 while queue and len(pages) < max_pages:
-                    url, depth = queue.pop(0)
-                    if url in visited or depth > max_depth:
+                    url, depth = queue.popleft()
+                    norm_url = self._normalize_url(url)
+                    if norm_url in visited or depth > max_depth:
                         continue
-                    visited.add(url)
+                    visited.add(norm_url)
 
+                    page = None
                     try:
                         page = await browser.new_page()
                         await page.goto(url, wait_until="networkidle", timeout=30000)
@@ -99,12 +113,18 @@ class WebParser:
                                     continue
                                 if same_domain_only and parsed.netloc != start_domain:
                                     continue
-                                if link not in visited:
+                                norm_link = self._normalize_url(link)
+                                if norm_link not in visited:
                                     queue.append((link, depth + 1))
 
-                        await page.close()
-                    except Exception:
-                        continue
+                    except Exception as exc:
+                        logger.warning("Crawl failed for %s: %s", url, exc)
+                    finally:
+                        if page is not None:
+                            try:
+                                await page.close()
+                            except Exception:
+                                pass
             finally:
                 await browser.close()
 

@@ -11,9 +11,23 @@ def ensure_upload_root() -> None:
     UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
 
 
+_MAX_FILENAME_LEN = 200
+
+
+def _safe_filename(name: str) -> str:
+    """Truncate overly long filenames to prevent filesystem limits."""
+    if len(name) <= _MAX_FILENAME_LEN:
+        return name
+    ext = Path(name).suffix
+    stem = Path(name).stem
+    max_stem = _MAX_FILENAME_LEN - len(ext)
+    return f"{stem[:max_stem]}{ext}"
+
+
 def save_temp_upload(file_data: bytes, original_filename: str) -> str:
     ensure_upload_root()
-    ext = Path(original_filename).suffix
+    safe_name = _safe_filename(original_filename)
+    ext = Path(safe_name).suffix
     temp_dir = UPLOAD_ROOT / "temp"
     temp_dir.mkdir(parents=True, exist_ok=True)
     temp_path = temp_dir / f"{uuid4().hex}{ext}"

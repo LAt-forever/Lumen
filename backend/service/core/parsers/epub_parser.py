@@ -16,6 +16,9 @@ class EpubParser:
     supported_types = frozenset({"epub"})
 
     async def parse(self, source, **kwargs) -> ParseResult:
+        if ebooklib is None or epub is None:
+            raise ValueError("ebooklib is not installed; cannot parse EPUB files")
+
         if not source.filename:
             raise ValueError("EPUB source is missing filename")
 

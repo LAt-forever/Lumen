@@ -12,6 +12,9 @@ class DocxParser:
     supported_types = frozenset({"docx"})
 
     async def parse(self, source, **kwargs) -> ParseResult:
+        if Document is None:
+            raise ValueError("python-docx is not installed; cannot parse DOCX files")
+
         if not source.filename:
             raise ValueError("DOCX source is missing filename")
 

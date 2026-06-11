@@ -76,9 +76,8 @@ export function useUploadSources() {
   return useMutation({
     mutationFn: api.uploadSources,
     onSuccess: async (result: BulkUploadResult) => {
-      for (const source of result.sources) {
-        if (source.status === 'pending') await api.indexSource(source.id)
-      }
+      const pending = result.sources.filter((s) => s.status === 'pending')
+      await Promise.all(pending.map((s) => api.indexSource(s.id)))
       await queryClient.invalidateQueries({ queryKey: ['sources'] })
       await queryClient.invalidateQueries({ queryKey: ['review'] })
     },

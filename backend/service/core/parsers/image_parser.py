@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import mimetypes
 
@@ -28,14 +29,18 @@ class ImageParser:
 
         file_path = resolve_file_path(source.filename)
 
-        # Phase 1: OCR with pytesseract
+        # Phase 1: OCR with pytesseract (CPU-intensive, run in thread)
         ocr_text = ""
         if pytesseract is not None and Image is not None:
             try:
-                img = Image.open(file_path)
-                if img.mode not in ("RGB", "L"):
-                    img = img.convert("RGB")
-                ocr_text = pytesseract.image_to_string(img, lang="chi_sim+eng").strip()
+
+                def _do_ocr(path: Path) -> str:
+                    with Image.open(path) as img:
+                        if img.mode not in ("RGB", "L"):
+                            img = img.convert("RGB")
+                        return pytesseract.image_to_string(img, lang="chi_sim+eng").strip()
+
+                ocr_text = await asyncio.to_thread(_do_ocr, file_path)
             except Exception:
                 pass  # OCR failure is non-fatal
 
@@ -63,7 +68,8 @@ class ImageParser:
                         ],
                     }
                 ]
-                vision_desc = vision_client.complete(messages).strip()
+                vision_desc = await asyncio.to_thread(vision_client.complete, messages)
+                vision_desc = vision_desc.strip()
             except (ChatCompletionError, Exception):
                 pass  # Vision failure is non-fatal
 

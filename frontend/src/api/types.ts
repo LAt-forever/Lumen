@@ -1,4 +1,4 @@
-export type SourceType = 'note' | 'pdf' | 'image' | 'docx' | 'epub' | 'bookmark' | 'web_crawl'
+export type SourceType = 'note' | 'text' | 'markdown' | 'pdf' | 'image' | 'docx' | 'epub' | 'link' | 'bookmark' | 'web_crawl'
 
 export type SourceRead = {
   id: number

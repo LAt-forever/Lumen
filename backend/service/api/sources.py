@@ -1,3 +1,5 @@
+import logging
+from functools import lru_cache
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile
@@ -7,7 +9,7 @@ from service.config import Settings
 from service.core.knowledge import KnowledgeService
 from service.core.llm import HttpxChatCompletionClient
 from service.core.parsers import get_parser
-from service.core.storage import move_to_final, save_temp_upload
+from service.core.storage import move_to_final, resolve_file_path, save_temp_upload
 from service.db import get_db
 from service.models import Source
 from service.repositories.chunks import ChunkRepository
@@ -21,6 +23,8 @@ from service.schemas import (
     SourceRead,
     WebCrawlRequest,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/sources", tags=["sources"])
 
@@ -71,8 +75,9 @@ def _source_detail(source, db: Session) -> SourceDetailRead:
     )
 
 
+@lru_cache
 def _build_vision_client() -> HttpxChatCompletionClient | None:
-    settings = Settings()
+    settings = get_settings()
     if settings.llm_api_key and settings.llm_model:
         return HttpxChatCompletionClient(
             base_url=settings.llm_base_url,
@@ -102,6 +107,7 @@ async def upload_source(files: list[UploadFile] = File(...), db: Session = Depen
         source_type = _source_type_for_filename(filename)
 
         if source_type is None:
+            # Fallback to "text" for schema compatibility; error_message clarifies the real issue
             failed_source = _failed_source(
                 sources,
                 SourceCreate(title=filename, source_type="text", filename=filename),
@@ -113,10 +119,22 @@ async def upload_source(files: list[UploadFile] = File(...), db: Session = Depen
 
         file_data = await file.read()
 
+        temp_relative: str | None = None
         try:
             # For text/markdown, decode content directly; for others, save to disk
             if source_type in ("text", "markdown"):
-                content = file_data.decode("utf-8").strip()
+                # Try UTF-8 first, then common Chinese encodings, then latin-1 as last resort
+                try:
+                    content = file_data.decode("utf-8").strip()
+                except UnicodeDecodeError:
+                    for enc in ("gbk", "gb2312", "big5"):
+                        try:
+                            content = file_data.decode(enc).strip()
+                            break
+                        except UnicodeDecodeError:
+                            continue
+                    else:
+                        content = file_data.decode("utf-8", errors="replace").strip()
                 source = sources.create(
                     SourceCreate(
                         title=filename,
@@ -177,6 +195,12 @@ async def upload_source(files: list[UploadFile] = File(...), db: Session = Depen
             succeeded += 1
 
         except Exception as exc:
+            # Clean up temp file on failure
+            if temp_relative is not None:
+                try:
+                    resolve_file_path(temp_relative).unlink(missing_ok=True)
+                except Exception:
+                    pass
             failed_source = _failed_source(
                 sources,
                 SourceCreate(title=filename, source_type=source_type or "text", filename=filename),
@@ -347,6 +371,8 @@ def delete_source(source_id: int, db: Session = Depends(get_db)):
 
 @router.post("/bookmarks", response_model=BulkUploadResult)
 async def import_bookmarks(data: BookmarkImportRequest, db: Session = Depends(get_db)):
+    import asyncio
+
     from bs4 import BeautifulSoup
 
     sources = SourceRepository(db)
@@ -371,50 +397,55 @@ async def import_bookmarks(data: BookmarkImportRequest, db: Session = Depends(ge
     result_sources: list[Source] = []
     succeeded = 0
     failed = 0
+    semaphore = asyncio.Semaphore(5)
 
-    for bm in bookmarks:
-        try:
-            temp_source = Source(
-                title=bm["title"],
-                source_type="bookmark",
-                url=bm["url"],
-            )
-            link_parser = get_parser("link")
-            parse_result = await link_parser.parse(temp_source)
-            content = parse_result.text.strip()
-            if not content:
-                raise ValueError("No text content found")
-            source = sources.create(
-                SourceCreate(
+    async def _import_one(bm: dict) -> Source | None:
+        nonlocal succeeded, failed
+        async with semaphore:
+            try:
+                temp_source = Source(
                     title=bm["title"],
                     source_type="bookmark",
                     url=bm["url"],
-                    content=content,
                 )
-            )
-            knowledge.index_source(source.id)
-            refreshed = sources.get(source.id)
-            if refreshed is not None:
-                result_sources.append(refreshed)
-            succeeded += 1
-        except Exception:
-            fallback_content = f"标题: {bm['title']}\n链接: {bm['url']}"
-            try:
+                link_parser = get_parser("link")
+                parse_result = await link_parser.parse(temp_source)
+                content = parse_result.text.strip()
+                if not content:
+                    raise ValueError("No text content found")
                 source = sources.create(
                     SourceCreate(
                         title=bm["title"],
                         source_type="bookmark",
                         url=bm["url"],
-                        content=fallback_content,
+                        content=content,
                     )
                 )
                 knowledge.index_source(source.id)
-                refreshed = sources.get(source.id)
-                if refreshed is not None:
-                    result_sources.append(refreshed)
-                succeeded += 1
+                return sources.get(source.id)
             except Exception:
-                failed += 1
+                fallback_content = f"标题: {bm['title']}\n链接: {bm['url']}"
+                try:
+                    source = sources.create(
+                        SourceCreate(
+                            title=bm["title"],
+                            source_type="bookmark",
+                            url=bm["url"],
+                            content=fallback_content,
+                        )
+                    )
+                    knowledge.index_source(source.id)
+                    return sources.get(source.id)
+                except Exception:
+                    return None
+
+    results = await asyncio.gather(*[_import_one(bm) for bm in bookmarks])
+    for result in results:
+        if result is not None:
+            result_sources.append(result)
+            succeeded += 1
+        else:
+            failed += 1
 
     return BulkUploadResult(
         total=len(bookmarks),
