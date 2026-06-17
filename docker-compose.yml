@@ -5,6 +5,11 @@ services:
       POSTGRES_DB: lumen
       POSTGRES_USER: lumen
       POSTGRES_PASSWORD: lumen
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lumen -d lumen"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     ports:
       - "5432:5432"
     volumes:
@@ -12,6 +17,11 @@ services:
 
   redis:
     image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     ports:
       - "6379:6379"
 
@@ -26,8 +36,15 @@ services:
       LUMEN_UPLOAD_STORAGE_PATH: /app/data/uploads
       LUMEN_LLM_MODE: extractive
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
     ports:
       - "8000:8000"
     volumes:
@@ -45,9 +62,12 @@ services:
       LUMEN_UPLOAD_STORAGE_PATH: /app/data/uploads
       LUMEN_LLM_MODE: extractive
     depends_on:
-      - postgres
-      - redis
-      - backend
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
     volumes:
       - lumen-data:/app/data
 
@@ -57,7 +77,8 @@ services:
     environment:
       VITE_API_BASE: http://127.0.0.1:8000
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     ports:
       - "5173:5173"
 

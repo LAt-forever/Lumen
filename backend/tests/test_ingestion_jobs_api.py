@@ -56,6 +56,27 @@ def test_upload_submission_creates_one_job_per_file_with_shared_batch(client, mo
     assert len(calls) == 2
 
 
+def test_binary_upload_submission_persists_file_for_worker(client, monkeypatch, tmp_path):
+    class FakeAsyncResult:
+        id = "task-pdf"
+
+    upload_root = tmp_path / "uploads"
+    monkeypatch.setattr("service.core.storage.UPLOAD_ROOT", upload_root)
+    monkeypatch.setattr("service.api.ingestion_jobs.process_ingestion_job.delay", lambda job_id: FakeAsyncResult())
+
+    response = client.post(
+        "/api/ingestion-jobs/uploads",
+        files=[("files", ("queued.pdf", b"%PDF-queued-binary", "application/pdf"))],
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    source = payload["sources"][0]
+    assert source["source_type"] == "pdf"
+    assert source["filename"].startswith(f"{source['id']}/")
+    assert (upload_root / source["filename"]).read_bytes() == b"%PDF-queued-binary"
+
+
 def test_bookmark_submission_creates_jobs_without_fetching_pages(client, monkeypatch):
     class FakeAsyncResult:
         id = "task-bookmark"

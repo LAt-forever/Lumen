@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from service.core.ingestion import decode_text_upload, source_type_for_filename
+from service.core.storage import move_to_final, resolve_file_path, save_temp_upload
 from service.db import get_db
 from service.repositories.ingestion_jobs import IngestionJobRepository
 from service.repositories.sources import SourceRepository
@@ -120,10 +121,22 @@ async def enqueue_uploads(files: list[UploadFile] = File(), db: Session = Depend
             job = jobs.mark_failed(job.id, "Unsupported file type")
         else:
             file_data = await file.read()
-            content = decode_text_upload(file_data) if source_type in ("text", "markdown") else None
-            source = sources.create(
-                SourceCreate(title=filename, source_type=source_type, filename=filename, content=content)
-            )
+            if source_type in ("text", "markdown"):
+                content = decode_text_upload(file_data)
+                source = sources.create(
+                    SourceCreate(title=filename, source_type=source_type, filename=filename, content=content)
+                )
+            else:
+                temp_relative = save_temp_upload(file_data, filename)
+                try:
+                    source = sources.create(SourceCreate(title=filename, source_type=source_type, filename=temp_relative))
+                    final_relative = move_to_final(temp_relative, source.id, filename)
+                    temp_relative = ""
+                    sources.update_filename(source.id, final_relative)
+                    source = sources.get(source.id) or source
+                finally:
+                    if temp_relative:
+                        resolve_file_path(temp_relative).unlink(missing_ok=True)
             job = jobs.create(
                 job_type="upload",
                 batch_id=batch_id,
