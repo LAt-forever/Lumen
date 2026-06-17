@@ -1,4 +1,5 @@
 import { useRetrySource, useStatusSummary } from '../api/hooks'
+import { IngestionProgressPanel } from './IngestionProgressPanel'
 
 export function StatusPanel() {
   const { data: status } = useStatusSummary()
@@ -40,6 +41,8 @@ export function StatusPanel() {
           <p>标签建议：{status.pending_tag_suggestion_count}</p>
         </article>
       </div>
+
+      <IngestionProgressPanel mode="full" />
 
       {status.suggested_actions.length > 0 ? (
         <div className="stack-list">

@@ -22,6 +22,41 @@ export type SourceDetailRead = SourceRead & {
   chunk_count: number
 }
 
+export type IngestionJobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'canceled'
+
+export type IngestionJobType = 'note' | 'upload' | 'link' | 'crawl' | 'bookmark' | 'index' | 'retry'
+
+export type IngestionJobRead = {
+  id: number
+  batch_id: string
+  source_id: number | null
+  source_title: string | null
+  job_type: IngestionJobType
+  status: IngestionJobStatus
+  progress_current: number
+  progress_total: number
+  message: string | null
+  error_message: string | null
+  created_at: string
+  updated_at: string
+  started_at: string | null
+  finished_at: string | null
+}
+
+export type IngestionJobCountsRead = Record<IngestionJobStatus, number>
+
+export type IngestionBatchRead = {
+  batch_id: string
+  total: number
+  queued: number
+  running: number
+  succeeded: number
+  failed: number
+  canceled: number
+  jobs: IngestionJobRead[]
+  sources: SourceRead[]
+}
+
 export type EvidenceMatch = {
   matched_terms: string[]
   matched_date: string | null
@@ -149,6 +184,7 @@ export type StatusSummaryRead = {
     pending: number
     parsing: number
   }
+  ingestion_jobs: IngestionJobCountsRead
   failed_sources: Array<Pick<SourceRead, 'id' | 'title' | 'source_type' | 'error_message' | 'created_at'>>
   pending_tag_suggestion_count: number
   latest_fallback_reason: string | null

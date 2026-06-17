@@ -3,13 +3,13 @@ import { ChangeEvent, FormEvent, useRef, useState } from 'react'
 import {
   useAskLumen,
   useAskLumenStream,
-  useCaptureLink,
-  useCreateSource,
-  useCrawlWeb,
-  useImportBookmarks,
-  useUploadSources,
+  useCaptureIngestionLink,
+  useCreateIngestionNote,
+  useCrawlIngestionWeb,
+  useImportIngestionBookmarks,
+  useUploadIngestionSources,
 } from '../api/hooks'
-import type { BulkUploadResult, ChatResponse } from '../api/types'
+import type { ChatResponse, IngestionBatchRead } from '../api/types'
 
 type CapturePanelProps = {
   onResponse?: (response: ChatResponse) => void
@@ -23,21 +23,23 @@ export function CapturePanel({ onResponse, onStreamChunk, onStreamStart }: Captu
   const [mode, setMode] = useState<CaptureMode>('note')
   const [draft, setDraft] = useState('')
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
-  const [uploadResult, setUploadResult] = useState<BulkUploadResult | null>(null)
+  const [uploadResult, setUploadResult] = useState<IngestionBatchRead | null>(null)
   const [link, setLink] = useState('')
+  const [linkResult, setLinkResult] = useState<IngestionBatchRead | null>(null)
   const [deepCrawl, setDeepCrawl] = useState(false)
   const [crawlDepth, setCrawlDepth] = useState(1)
   const [crawlMaxPages, setCrawlMaxPages] = useState(10)
   const [bookmarkHtml, setBookmarkHtml] = useState('')
-  const [bookmarkResult, setBookmarkResult] = useState<BulkUploadResult | null>(null)
+  const [bookmarkResult, setBookmarkResult] = useState<IngestionBatchRead | null>(null)
+  const [noteResult, setNoteResult] = useState<IngestionBatchRead | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const askLumen = useAskLumen()
   const askLumenStream = useAskLumenStream()
-  const createSource = useCreateSource()
-  const uploadSources = useUploadSources()
-  const captureLink = useCaptureLink()
-  const crawlWeb = useCrawlWeb()
-  const importBookmarks = useImportBookmarks()
+  const createSource = useCreateIngestionNote()
+  const uploadSources = useUploadIngestionSources()
+  const captureLink = useCaptureIngestionLink()
+  const crawlWeb = useCrawlIngestionWeb()
+  const importBookmarks = useImportIngestionBookmarks()
 
   const handleAsk = (event: FormEvent) => {
     event.preventDefault()
@@ -60,7 +62,15 @@ export function CapturePanel({ onResponse, onStreamChunk, onStreamStart }: Captu
   const handleAddSource = () => {
     const content = draft.trim()
     if (mode === 'note' && content) {
-      createSource.mutate({ title: content.slice(0, 72), source_type: 'note', content })
+      createSource.mutate(
+        { title: content.slice(0, 72), source_type: 'note', content },
+        {
+          onSuccess: (result) => {
+            setNoteResult(result)
+            setDraft('')
+          },
+        },
+      )
     }
   }
 
@@ -99,15 +109,22 @@ export function CapturePanel({ onResponse, onStreamChunk, onStreamStart }: Captu
   const handleCaptureLink = () => {
     const url = link.trim()
     if (!url) return
+    const onSuccess = (result: IngestionBatchRead) => {
+      setLinkResult(result)
+      setLink('')
+    }
     if (deepCrawl) {
-      crawlWeb.mutate({
-        url,
-        max_depth: crawlDepth,
-        max_pages: crawlMaxPages,
-        same_domain_only: true,
-      })
+      crawlWeb.mutate(
+        {
+          url,
+          max_depth: crawlDepth,
+          max_pages: crawlMaxPages,
+          same_domain_only: true,
+        },
+        { onSuccess },
+      )
     } else {
-      captureLink.mutate(url)
+      captureLink.mutate(url, { onSuccess })
     }
   }
 
@@ -122,9 +139,8 @@ export function CapturePanel({ onResponse, onStreamChunk, onStreamStart }: Captu
     })
   }
 
-  const isBusy =
-    askLumen.isPending ||
-    askLumenStream.isPending ||
+  const askBusy = askLumen.isPending || askLumenStream.isPending
+  const submitBusy =
     createSource.isPending ||
     uploadSources.isPending ||
     captureLink.isPending ||
@@ -139,7 +155,7 @@ export function CapturePanel({ onResponse, onStreamChunk, onStreamStart }: Captu
           <p className="eyebrow">主工作区</p>
           <h2>询问或记录</h2>
         </div>
-        <span className="mode-pill">{isBusy ? '处理中' : '就绪'}</span>
+        <span className="mode-pill">{submitBusy ? '提交中' : askBusy ? '回答中' : '就绪'}</span>
       </div>
       <div className="segmented-control" aria-label="资料接入模式">
         <button className={mode === 'note' ? 'active' : ''} onClick={() => setMode('note')} type="button">
@@ -168,11 +184,12 @@ export function CapturePanel({ onResponse, onStreamChunk, onStreamStart }: Captu
             placeholder="例如：2026年6月1日做了什么工作？"
             value={draft}
           />
+          {noteResult ? <p className="helper-text">已加入队列：{noteResult.total} 个任务</p> : null}
           <div className="action-row">
-            <button disabled={isBusy || !canUseDraft} type="submit">
+            <button disabled={askBusy || !canUseDraft} type="submit">
               询问 Lumen
             </button>
-            <button disabled={isBusy || !canUseDraft} onClick={handleAddSource} type="button" className="secondary">
+            <button disabled={submitBusy || !canUseDraft} onClick={handleAddSource} type="button" className="secondary">
               添加资料
             </button>
           </div>
@@ -199,15 +216,15 @@ export function CapturePanel({ onResponse, onStreamChunk, onStreamStart }: Captu
           </p>
           {uploadResult ? (
             <p className="helper-text">
-              上传完成：成功 {uploadResult.succeeded}，失败 {uploadResult.failed}
+              已加入队列：{uploadResult.total} 个任务
             </p>
           ) : null}
           <div className="action-row">
-            <button disabled={isBusy} onClick={handleUpload} type="button">
+            <button disabled={submitBusy} onClick={handleUpload} type="button">
               {selectedFiles.length > 0 ? '上传文件' : '选择文件'}
             </button>
             {selectedFiles.length > 0 || uploadResult ? (
-              <button disabled={isBusy} onClick={resetSelectedFiles} type="button" className="secondary">
+              <button disabled={submitBusy} onClick={resetSelectedFiles} type="button" className="secondary">
                 清除
               </button>
             ) : null}
@@ -261,8 +278,9 @@ export function CapturePanel({ onResponse, onStreamChunk, onStreamStart }: Captu
               </label>
             </div>
           ) : null}
+          {linkResult ? <p className="helper-text">已加入队列：{linkResult.total} 个任务</p> : null}
           <div className="action-row">
-            <button disabled={isBusy || !link.trim()} onClick={handleCaptureLink} type="button">
+            <button disabled={submitBusy || !link.trim()} onClick={handleCaptureLink} type="button">
               {deepCrawl ? '深度抓取' : '添加链接'}
             </button>
           </div>
@@ -284,16 +302,16 @@ export function CapturePanel({ onResponse, onStreamChunk, onStreamStart }: Captu
           />
           {bookmarkResult ? (
             <p className="helper-text">
-              导入完成：共 {bookmarkResult.total} 个，成功 {bookmarkResult.succeeded} 个
+              已加入队列：{bookmarkResult.total} 个任务
             </p>
           ) : null}
           <div className="action-row">
-            <button disabled={isBusy || !bookmarkHtml.trim()} onClick={handleImportBookmarks} type="button">
+            <button disabled={submitBusy || !bookmarkHtml.trim()} onClick={handleImportBookmarks} type="button">
               导入书签
             </button>
             {bookmarkResult ? (
               <button
-                disabled={isBusy}
+                disabled={submitBusy}
                 onClick={() => setBookmarkResult(null)}
                 type="button"
                 className="secondary"

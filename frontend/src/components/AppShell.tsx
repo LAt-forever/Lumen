@@ -6,6 +6,7 @@ import type { ChatResponse } from '../api/types'
 import { CapturePanel } from './CapturePanel'
 import { ChatPanel } from './ChatPanel'
 import { ContextPanel } from './ContextPanel'
+import { IngestionProgressPanel } from './IngestionProgressPanel'
 import { MemoryGraphPanel } from './MemoryGraphPanel'
 import { MemoryManager } from './MemoryManager'
 import { MemoryInbox } from './MemoryInbox'
@@ -151,6 +152,7 @@ export function AppShell({ navItems }: AppShellProps) {
 
         {activeView === 'today' || activeView === 'ask' || activeView === 'library' ? (
           <aside className="context-column">
+            <IngestionProgressPanel mode="compact" onOpenStatus={() => setActiveView('status')} />
             <MemoryInbox />
             <ContextPanel response={lastResponse} />
           </aside>

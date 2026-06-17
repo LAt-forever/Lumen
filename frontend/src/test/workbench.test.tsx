@@ -78,6 +78,132 @@ describe('Lumen workbench', () => {
         if (url.endsWith('/api/sources/7') && method === 'DELETE') {
           return noContentResponse()
         }
+        if (url.includes('/api/ingestion-jobs') && method === 'GET') {
+          return jsonResponse([
+            {
+              id: 101,
+              batch_id: 'batch-active',
+              source_id: 8,
+              source_title: 'phase-1-1.txt',
+              job_type: 'upload',
+              status: 'running',
+              progress_current: 1,
+              progress_total: 3,
+              message: '正在解析资料',
+              error_message: null,
+              created_at: '2026-06-05T00:00:00',
+              updated_at: '2026-06-05T00:00:01',
+              started_at: '2026-06-05T00:00:01',
+              finished_at: null,
+            },
+            {
+              id: 102,
+              batch_id: 'batch-failed',
+              source_id: 12,
+              source_title: '失败链接',
+              job_type: 'link',
+              status: 'failed',
+              progress_current: 1,
+              progress_total: 3,
+              message: '正在解析资料',
+              error_message: 'temporary link failure',
+              created_at: '2026-06-05T00:00:00',
+              updated_at: '2026-06-05T00:00:02',
+              started_at: '2026-06-05T00:00:01',
+              finished_at: '2026-06-05T00:00:02',
+            },
+          ])
+        }
+        if (url.endsWith('/api/ingestion-jobs/notes') && method === 'POST') {
+          return jsonResponse({
+            batch_id: 'batch-note',
+            total: 1,
+            queued: 1,
+            running: 0,
+            succeeded: 0,
+            failed: 0,
+            canceled: 0,
+            jobs: [
+              {
+                id: 100,
+                batch_id: 'batch-note',
+                source_id: 20,
+                source_title: 'Lumen queued note',
+                job_type: 'note',
+                status: 'queued',
+                progress_current: 0,
+                progress_total: 3,
+                message: '已加入队列',
+                error_message: null,
+                created_at: '2026-06-05T00:00:00',
+                updated_at: '2026-06-05T00:00:00',
+                started_at: null,
+                finished_at: null,
+              },
+            ],
+            sources: [],
+          })
+        }
+        if (url.endsWith('/api/ingestion-jobs/uploads') && method === 'POST') {
+          return jsonResponse({
+            batch_id: 'batch-upload',
+            total: 1,
+            queued: 1,
+            running: 0,
+            succeeded: 0,
+            failed: 0,
+            canceled: 0,
+            jobs: [
+              {
+                id: 101,
+                batch_id: 'batch-upload',
+                source_id: 8,
+                source_title: 'phase-1-1.txt',
+                job_type: 'upload',
+                status: 'queued',
+                progress_current: 0,
+                progress_total: 3,
+                message: '已加入队列',
+                error_message: null,
+                created_at: '2026-06-05T00:00:00',
+                updated_at: '2026-06-05T00:00:00',
+                started_at: null,
+                finished_at: null,
+              },
+            ],
+            sources: [],
+          })
+        }
+        if (url.endsWith('/api/ingestion-jobs/links') && method === 'POST') {
+          return jsonResponse({
+            batch_id: 'batch-link',
+            total: 1,
+            queued: 1,
+            running: 0,
+            succeeded: 0,
+            failed: 0,
+            canceled: 0,
+            jobs: [
+              {
+                id: 103,
+                batch_id: 'batch-link',
+                source_id: 9,
+                source_title: 'https://example.com/lumen',
+                job_type: 'link',
+                status: 'queued',
+                progress_current: 0,
+                progress_total: 3,
+                message: '已加入队列',
+                error_message: null,
+                created_at: '2026-06-05T00:00:00',
+                updated_at: '2026-06-05T00:00:00',
+                started_at: null,
+                finished_at: null,
+              },
+            ],
+            sources: [],
+          })
+        }
         if (url.endsWith('/api/sources/upload') && method === 'POST') {
           return jsonResponse({
             id: 8,
@@ -373,6 +499,7 @@ describe('Lumen workbench', () => {
               active_profile_name: null,
             },
             source_counts: { total: 2, indexed: 1, failed: 1, pending: 0, parsing: 0 },
+            ingestion_jobs: { queued: 0, running: 1, succeeded: 0, failed: 1, canceled: 0 },
             failed_sources: [
               {
                 id: 12,
@@ -388,6 +515,37 @@ describe('Lumen workbench', () => {
               { label: '重试 1 个失败资料', target_view: 'library', target_id: null },
               { label: '确认 2 个标签建议', target_view: 'status', target_id: null },
             ],
+          })
+        }
+        if (url.endsWith('/api/ingestion-jobs/101/cancel') && method === 'POST') {
+          return jsonResponse({
+            id: 101,
+            batch_id: 'batch-active',
+            source_id: 8,
+            source_title: 'phase-1-1.txt',
+            job_type: 'upload',
+            status: 'canceled',
+            progress_current: 1,
+            progress_total: 3,
+            message: '已取消',
+            error_message: null,
+            created_at: '2026-06-05T00:00:00',
+            updated_at: '2026-06-05T00:00:02',
+            started_at: null,
+            finished_at: '2026-06-05T00:00:02',
+          })
+        }
+        if (url.endsWith('/api/ingestion-jobs/102/retry') && method === 'POST') {
+          return jsonResponse({
+            batch_id: 'batch-retry',
+            total: 1,
+            queued: 1,
+            running: 0,
+            succeeded: 0,
+            failed: 0,
+            canceled: 0,
+            jobs: [],
+            sources: [],
           })
         }
         if (url.endsWith('/api/sources/12/retry') && method === 'POST') {
@@ -685,16 +843,17 @@ describe('Lumen workbench', () => {
     await user.click(screen.getByRole('button', { name: '上传文件' }))
 
     expect(fetch).toHaveBeenCalledWith(
-      'http://127.0.0.1:8000/api/sources/upload',
+      'http://127.0.0.1:8000/api/ingestion-jobs/uploads',
       expect.objectContaining({ method: 'POST' }),
     )
+    expect(await screen.findByText('已加入队列：1 个任务')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: '链接' }))
     await user.type(screen.getByLabelText('网页链接'), 'https://example.com/lumen')
     await user.click(screen.getByRole('button', { name: '添加链接' }))
 
     expect(fetch).toHaveBeenCalledWith(
-      'http://127.0.0.1:8000/api/sources/link',
+      'http://127.0.0.1:8000/api/ingestion-jobs/links',
       expect.objectContaining({ method: 'POST' }),
     )
 
@@ -760,10 +919,11 @@ describe('Lumen workbench', () => {
 
     await waitFor(() =>
       expect(fetch).toHaveBeenCalledWith(
-        'http://127.0.0.1:8000/api/sources/upload',
+        'http://127.0.0.1:8000/api/ingestion-jobs/uploads',
         expect.objectContaining({ method: 'POST' }),
       ),
     )
+    expect(await screen.findByText('已加入队列：1 个任务')).toBeInTheDocument()
   })
 
   it('manages SQLite-backed model provider profiles from settings', async () => {
@@ -884,6 +1044,22 @@ describe('Lumen workbench', () => {
     expect(screen.getByText('索引失败：1')).toBeInTheDocument()
     expect(screen.getByText('标签建议：2')).toBeInTheDocument()
     expect(screen.getByText('失败链接')).toBeInTheDocument()
+    expect(screen.getByText('摄取任务')).toBeInTheDocument()
+    expect(screen.getByText('处理中')).toBeInTheDocument()
+    expect(screen.getByText('phase-1-1.txt')).toBeInTheDocument()
+    expect(screen.getByText('temporary link failure')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '取消任务' }))
+    expect(fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:8000/api/ingestion-jobs/101/cancel',
+      expect.objectContaining({ method: 'POST' }),
+    )
+
+    await user.click(screen.getByRole('button', { name: '重试任务' }))
+    expect(fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:8000/api/ingestion-jobs/102/retry',
+      expect.objectContaining({ method: 'POST' }),
+    )
 
     await user.click(screen.getByRole('button', { name: '重试资料' }))
     expect(fetch).toHaveBeenCalledWith(
