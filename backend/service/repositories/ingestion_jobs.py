@@ -134,6 +134,11 @@ class IngestionJobRepository:
                 counts[job.status] += 1
         return counts
 
+    def refresh(self, job_id: int) -> IngestionJob:
+        job = self._required(job_id)
+        self.db.refresh(job)
+        return job
+
     def _required(self, job_id: int) -> IngestionJob:
         job = self.db.get(IngestionJob, job_id)
         if job is None:
