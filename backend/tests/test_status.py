@@ -18,6 +18,13 @@ def test_status_summary_reports_runtime_sources_and_pending_tag_suggestions(clie
     assert payload["runtime"]["runtime_source"] == "extractive"
     assert payload["source_counts"]["total"] == 1
     assert payload["source_counts"]["indexed"] == 1
+    assert payload["ingestion_jobs"] == {
+        "queued": 0,
+        "running": 0,
+        "succeeded": 0,
+        "failed": 0,
+        "canceled": 0,
+    }
     assert payload["pending_tag_suggestion_count"] >= 1
     assert any("标签建议" in action["label"] for action in payload["suggested_actions"])
 
@@ -71,3 +78,19 @@ def test_status_runtime_payload_does_not_leak_api_keys(client):
     assert "super-secret-status-key" not in response.text
     payload = response.json()
     assert payload["runtime"]["active_profile_name"] == "Secret Profile"
+
+
+def test_status_summary_reports_ingestion_job_counts(client, monkeypatch):
+    class FakeAsyncResult:
+        id = "task-status"
+
+    monkeypatch.setattr("service.api.ingestion_jobs.process_ingestion_job.delay", lambda job_id: FakeAsyncResult())
+    client.post(
+        "/api/ingestion-jobs/notes",
+        json={"title": "Status queued", "source_type": "note", "content": "Status queued content."},
+    )
+
+    response = client.get("/api/status")
+
+    assert response.status_code == 200
+    assert response.json()["ingestion_jobs"]["queued"] == 1
