@@ -1,0 +1,66 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: lumen
+      POSTGRES_USER: lumen
+      POSTGRES_PASSWORD: lumen
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  backend:
+    build:
+      context: ./backend
+    environment:
+      LUMEN_DATABASE_URL: postgresql+psycopg://lumen:lumen@postgres:5432/lumen
+      LUMEN_CELERY_BROKER_URL: redis://redis:6379/0
+      LUMEN_CELERY_RESULT_BACKEND: redis://redis:6379/1
+      LUMEN_DATA_DIR: /app/data
+      LUMEN_UPLOAD_STORAGE_PATH: /app/data/uploads
+      LUMEN_LLM_MODE: extractive
+    depends_on:
+      - postgres
+      - redis
+    ports:
+      - "8000:8000"
+    volumes:
+      - lumen-data:/app/data
+
+  worker:
+    build:
+      context: ./backend
+    command: ["uv", "run", "celery", "-A", "service.worker:celery_app", "worker", "--loglevel=info", "--concurrency=1"]
+    environment:
+      LUMEN_DATABASE_URL: postgresql+psycopg://lumen:lumen@postgres:5432/lumen
+      LUMEN_CELERY_BROKER_URL: redis://redis:6379/0
+      LUMEN_CELERY_RESULT_BACKEND: redis://redis:6379/1
+      LUMEN_DATA_DIR: /app/data
+      LUMEN_UPLOAD_STORAGE_PATH: /app/data/uploads
+      LUMEN_LLM_MODE: extractive
+    depends_on:
+      - postgres
+      - redis
+      - backend
+    volumes:
+      - lumen-data:/app/data
+
+  frontend:
+    build:
+      context: ./frontend
+    environment:
+      VITE_API_BASE: http://127.0.0.1:8000
+    depends_on:
+      - backend
+    ports:
+      - "5173:5173"
+
+volumes:
+  postgres-data:
+  lumen-data:
