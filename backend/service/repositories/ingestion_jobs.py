@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
@@ -8,6 +8,10 @@ from sqlalchemy.orm import Session, selectinload
 from service.models import IngestionJob
 
 JOB_STATUSES = ("queued", "running", "succeeded", "failed", "canceled")
+
+
+def _utcnow() -> datetime:
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 class IngestionJobRepository:
@@ -71,7 +75,7 @@ class IngestionJobRepository:
         job.status = "running"
         if celery_task_id:
             job.celery_task_id = celery_task_id
-        job.started_at = datetime.utcnow()
+        job.started_at = _utcnow()
         job.finished_at = None
         job.error_message = None
         self.db.commit()
@@ -94,7 +98,7 @@ class IngestionJobRepository:
         if message:
             job.message = message
         job.error_message = None
-        job.finished_at = datetime.utcnow()
+        job.finished_at = _utcnow()
         self.db.commit()
         self.db.refresh(job)
         return job
@@ -103,7 +107,7 @@ class IngestionJobRepository:
         job = self._required(job_id)
         job.status = "failed"
         job.error_message = error_message
-        job.finished_at = datetime.utcnow()
+        job.finished_at = _utcnow()
         self.db.commit()
         self.db.refresh(job)
         return job
@@ -114,7 +118,7 @@ class IngestionJobRepository:
             return None
         job.status = "canceled"
         job.message = "已取消"
-        job.finished_at = datetime.utcnow()
+        job.finished_at = _utcnow()
         self.db.commit()
         self.db.refresh(job)
         return job
