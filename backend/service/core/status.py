@@ -2,6 +2,7 @@ from service.config import Settings
 from service.core.llm import resolve_runtime_llm_config
 from service.core.tagging import TagSuggestionService
 from service.repositories.conversations import ConversationRepository
+from service.repositories.ingestion_jobs import IngestionJobRepository
 from service.repositories.memories import MemoryRepository
 from service.repositories.organization import OrganizationRepository
 from service.repositories.provider_profiles import ProviderProfileRepository
@@ -20,6 +21,7 @@ class StatusService:
         self,
         settings: Settings,
         sources: SourceRepository,
+        ingestion_jobs: IngestionJobRepository,
         memories: MemoryRepository,
         conversations: ConversationRepository,
         organization: OrganizationRepository,
@@ -27,6 +29,7 @@ class StatusService:
     ):
         self.settings = settings
         self.sources = sources
+        self.ingestion_jobs = ingestion_jobs
         self.memories = memories
         self.conversations = conversations
         self.organization = organization
@@ -50,6 +53,7 @@ class StatusService:
         return StatusSummaryRead(
             runtime=runtime,
             source_counts=counts,
+            ingestion_jobs=self.ingestion_jobs.status_counts(),
             failed_sources=failed_sources,
             pending_tag_suggestion_count=pending_count,
             latest_fallback_reason=runtime.latest_fallback_reason,

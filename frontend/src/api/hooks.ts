@@ -7,6 +7,8 @@ import type {
   ChunkRead,
   FavoriteRead,
   GlobalSearchResultRead,
+  IngestionBatchRead,
+  IngestionJobRead,
   LLMProviderProfileCreate,
   LLMProviderProfileRead,
   LLMProviderProfileUpdate,
@@ -49,6 +51,87 @@ export function useCreateSource() {
       await api.indexSource(created.id)
       await queryClient.invalidateQueries({ queryKey: ['sources'] })
       await queryClient.invalidateQueries({ queryKey: ['review'] })
+    },
+  })
+}
+
+function invalidateIngestionDependents(queryClient: ReturnType<typeof useQueryClient>) {
+  return Promise.all([
+    queryClient.invalidateQueries({ queryKey: ['ingestion-jobs'] }),
+    queryClient.invalidateQueries({ queryKey: ['sources'] }),
+    queryClient.invalidateQueries({ queryKey: ['review'] }),
+    queryClient.invalidateQueries({ queryKey: ['status'] }),
+    queryClient.invalidateQueries({ queryKey: ['search'] }),
+    queryClient.invalidateQueries({ queryKey: ['global-search'] }),
+  ])
+}
+
+export function ingestionJobsPollInterval(jobs: IngestionJobRead[] | undefined) {
+  if (jobs?.some((job) => job.status === 'queued' || job.status === 'running')) {
+    return 1750
+  }
+  return false
+}
+
+function useIngestionSubmitMutation<TInput>(mutationFn: (input: TInput) => Promise<IngestionBatchRead>) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn,
+    onSuccess: async () => {
+      await invalidateIngestionDependents(queryClient)
+    },
+  })
+}
+
+export function useCreateIngestionNote() {
+  return useIngestionSubmitMutation<{ title: string; source_type: 'note'; content: string }>(api.createIngestionNote)
+}
+
+export function useUploadIngestionSources() {
+  return useIngestionSubmitMutation<File[]>(api.uploadIngestionSources)
+}
+
+export function useCaptureIngestionLink() {
+  return useIngestionSubmitMutation<string>(api.captureIngestionLink)
+}
+
+export function useCrawlIngestionWeb() {
+  return useIngestionSubmitMutation<{
+    url: string
+    max_depth: number
+    max_pages: number
+    same_domain_only: boolean
+  }>(api.crawlIngestionWeb)
+}
+
+export function useImportIngestionBookmarks() {
+  return useIngestionSubmitMutation<string>(api.importIngestionBookmarks)
+}
+
+export function useIngestionJobs(limit = 20) {
+  return useQuery<IngestionJobRead[]>({
+    queryKey: ['ingestion-jobs', { limit }],
+    queryFn: () => api.listIngestionJobs({ limit }),
+    refetchInterval: (query) => ingestionJobsPollInterval(query.state.data as IngestionJobRead[] | undefined),
+  })
+}
+
+export function useCancelIngestionJob() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: api.cancelIngestionJob,
+    onSuccess: async () => {
+      await invalidateIngestionDependents(queryClient)
+    },
+  })
+}
+
+export function useRetryIngestionJob() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: api.retryIngestionJob,
+    onSuccess: async () => {
+      await invalidateIngestionDependents(queryClient)
     },
   })
 }

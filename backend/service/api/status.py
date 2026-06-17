@@ -5,6 +5,7 @@ from service.config import Settings, get_settings
 from service.core.status import StatusService
 from service.db import get_db
 from service.repositories.conversations import ConversationRepository
+from service.repositories.ingestion_jobs import IngestionJobRepository
 from service.repositories.memories import MemoryRepository
 from service.repositories.organization import OrganizationRepository
 from service.repositories.provider_profiles import ProviderProfileRepository
@@ -19,6 +20,7 @@ def status_summary(settings: Settings = Depends(get_settings), db: Session = Dep
     return StatusService(
         settings,
         SourceRepository(db),
+        IngestionJobRepository(db),
         MemoryRepository(db),
         ConversationRepository(db),
         OrganizationRepository(db),

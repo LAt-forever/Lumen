@@ -3,6 +3,8 @@ import type {
   ChunkRead,
   FavoriteRead,
   GlobalSearchResultRead,
+  IngestionBatchRead,
+  IngestionJobRead,
   LLMProviderProfileCreate,
   LLMProviderProfileRead,
   LLMProviderProfileUpdate,
@@ -107,6 +109,34 @@ export const api = {
   getSource: (sourceId: number) => request<SourceDetailRead>(`/api/sources/${sourceId}`),
   createSource: (payload: { title: string; source_type: 'note'; content: string }) =>
     request<SourceRead>('/api/sources', { method: 'POST', body: JSON.stringify(payload) }),
+  createIngestionNote: (payload: { title: string; source_type: 'note'; content: string }) =>
+    request<IngestionBatchRead>('/api/ingestion-jobs/notes', { method: 'POST', body: JSON.stringify(payload) }),
+  uploadIngestionSources: (files: File[]) => {
+    const body = new FormData()
+    files.forEach((f) => body.append('files', f))
+    return request<IngestionBatchRead>('/api/ingestion-jobs/uploads', { method: 'POST', body })
+  },
+  crawlIngestionWeb: (payload: { url: string; max_depth: number; max_pages: number; same_domain_only: boolean }) =>
+    request<IngestionBatchRead>('/api/ingestion-jobs/crawls', { method: 'POST', body: JSON.stringify(payload) }),
+  importIngestionBookmarks: (htmlContent: string) =>
+    request<IngestionBatchRead>('/api/ingestion-jobs/bookmarks', {
+      method: 'POST',
+      body: JSON.stringify({ html_content: htmlContent }),
+    }),
+  captureIngestionLink: (url: string) =>
+    request<IngestionBatchRead>('/api/ingestion-jobs/links', { method: 'POST', body: JSON.stringify({ url }) }),
+  listIngestionJobs: (params: { status?: string; batch_id?: string; limit?: number } = {}) => {
+    const search = new URLSearchParams()
+    if (params.status) search.set('status', params.status)
+    if (params.batch_id) search.set('batch_id', params.batch_id)
+    if (params.limit) search.set('limit', String(params.limit))
+    const suffix = search.toString() ? `?${search.toString()}` : ''
+    return request<IngestionJobRead[]>(`/api/ingestion-jobs${suffix}`)
+  },
+  cancelIngestionJob: (jobId: number) =>
+    request<IngestionJobRead>(`/api/ingestion-jobs/${jobId}/cancel`, { method: 'POST' }),
+  retryIngestionJob: (jobId: number) =>
+    request<IngestionBatchRead>(`/api/ingestion-jobs/${jobId}/retry`, { method: 'POST' }),
   uploadSources: (files: File[]) => {
     const body = new FormData()
     files.forEach((f) => body.append('files', f))

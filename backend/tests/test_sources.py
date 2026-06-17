@@ -157,3 +157,28 @@ def test_capture_link_fetch_failure_creates_failed_source(client, monkeypatch):
     assert source["url"] == "https://example.invalid"
     assert source["status"] == "failed"
     assert source["error_message"] == "Could not fetch URL"
+
+
+def test_image_retry_uses_configured_vision_client_without_name_error(client, monkeypatch):
+    from service.core.parsers.base import ParseResult
+    from service.core.parsers.image_parser import ImageParser
+
+    calls = {"kwargs": None}
+
+    async def fake_parse(self, source, **kwargs):
+        calls["kwargs"] = kwargs
+        return ParseResult(text="Image retry text")
+
+    monkeypatch.setenv("LUMEN_LLM_MODEL", "vision-test")
+    monkeypatch.setenv("LUMEN_LLM_API_KEY", "vision-key")
+    monkeypatch.setattr(ImageParser, "parse", fake_parse)
+
+    source = client.post(
+        "/api/sources",
+        json={"title": "scan.png", "source_type": "image", "filename": "missing.png"},
+    ).json()
+    response = client.post(f"/api/sources/{source['id']}/retry")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "indexed"
+    assert "vision_client" in calls["kwargs"]

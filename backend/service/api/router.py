@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from service.api import chat, global_search, memories, organization, review, search, settings, sources, status
+from service.api import chat, global_search, ingestion_jobs, memories, organization, review, search, settings, sources, status
 
 router = APIRouter()
 
@@ -11,6 +11,7 @@ def healthz() -> dict[str, str]:
 
 
 router.include_router(sources.router)
+router.include_router(ingestion_jobs.router)
 router.include_router(chat.router)
 router.include_router(memories.router)
 router.include_router(search.router)
