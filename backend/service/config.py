@@ -7,6 +7,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     app_name: str = "Lumen"
     database_url: str = "sqlite:///./lumen.db"
+    celery_broker_url: str = "redis://127.0.0.1:6379/0"
+    celery_result_backend: str = "redis://127.0.0.1:6379/1"
     data_dir: Path = Path("./data")
     llm_mode: str = "extractive"
     llm_provider: str = "openai-compatible"

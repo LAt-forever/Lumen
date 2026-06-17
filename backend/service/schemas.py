@@ -18,6 +18,8 @@ TargetType = Literal["source", "memory", "message"]
 TagAssignmentSource = Literal["user", "ai-confirmed"]
 TagSuggestionStatus = Literal["pending", "confirmed", "ignored"]
 GlobalSearchResultType = Literal["source_chunk", "source", "memory", "message"]
+IngestionJobStatus = Literal["queued", "running", "succeeded", "failed", "canceled"]
+IngestionJobType = Literal["note", "upload", "link", "crawl", "bookmark", "index", "retry"]
 
 
 class SourceCreate(BaseModel):
@@ -240,6 +242,45 @@ class GlobalSearchResultRead(BaseModel):
     created_at: datetime
 
 
+class IngestionJobRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    batch_id: str
+    source_id: int | None
+    source_title: str | None = None
+    job_type: str
+    status: str
+    progress_current: int
+    progress_total: int
+    message: str | None
+    error_message: str | None
+    created_at: datetime
+    updated_at: datetime
+    started_at: datetime | None
+    finished_at: datetime | None
+
+
+class IngestionJobCountsRead(BaseModel):
+    queued: int = 0
+    running: int = 0
+    succeeded: int = 0
+    failed: int = 0
+    canceled: int = 0
+
+
+class IngestionBatchRead(BaseModel):
+    batch_id: str
+    total: int
+    queued: int
+    running: int = 0
+    succeeded: int = 0
+    failed: int = 0
+    canceled: int = 0
+    jobs: list[IngestionJobRead] = Field(default_factory=list)
+    sources: list[SourceRead] = Field(default_factory=list)
+
+
 class SourceCountsRead(BaseModel):
     total: int
     indexed: int
@@ -265,6 +306,7 @@ class StatusActionRead(BaseModel):
 class StatusSummaryRead(BaseModel):
     runtime: RuntimeSettingsRead
     source_counts: SourceCountsRead
+    ingestion_jobs: IngestionJobCountsRead = Field(default_factory=IngestionJobCountsRead)
     failed_sources: list[FailedSourceRead] = Field(default_factory=list)
     pending_tag_suggestion_count: int
     latest_fallback_reason: str | None = None
