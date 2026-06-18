@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import mimetypes
+from pathlib import Path
 
 from service.core.llm import ChatCompletionError
 from service.core.parsers import register_parser

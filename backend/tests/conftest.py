@@ -25,6 +25,7 @@ def isolate_settings_from_dotenv(monkeypatch):
 @pytest.fixture()
 def client(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("LUMEN_LLM_MODE", "extractive")
+    monkeypatch.setenv("LUMEN_DATA_DIR", str(tmp_path / "data"))
     for env_var in (
         "LUMEN_LLM_PROVIDER",
         "LUMEN_LLM_BASE_URL",

@@ -276,3 +276,76 @@ export type MemoryGraphRead = {
   nodes: MemoryGraphNode[]
   edges: MemoryGraphEdge[]
 }
+
+export type AgentToolName = 'global_search' | 'memory_search' | 'memory_graph'
+
+export type AgentProfileRead = {
+  id: number
+  name: string
+  instructions: string
+  enabled_tools: AgentToolName[]
+  require_approval: boolean
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export type AgentProfileCreate = {
+  name: string
+  instructions: string
+  enabled_tools: AgentToolName[]
+  require_approval: boolean
+  is_active: boolean
+}
+
+export type AgentProfileUpdate = Partial<AgentProfileCreate>
+
+export type AgentToolLogRead = {
+  id: number
+  profile_id: number | null
+  tool_name: AgentToolName
+  action: string
+  input_json: string
+  result_summary: string | null
+  status: string
+  error_message: string | null
+  created_at: string
+}
+
+export type AgentRunResponse = {
+  answer: string
+  used_tools: AgentToolName[]
+  search_results: GlobalSearchResultRead[]
+  memories: MemoryRead[]
+  graph: MemoryGraphRead | null
+  tool_logs: AgentToolLogRead[]
+}
+
+export type RerankerProfileRead = {
+  id: number
+  name: string
+  provider: string
+  base_url: string | null
+  model: string | null
+  api_key_configured: boolean
+  top_n: number
+  is_active: boolean
+  status: string
+  last_error: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type RerankerProfileCreate = {
+  name: string
+  provider: string
+  base_url?: string | null
+  model?: string | null
+  api_key?: string | null
+  top_n: number
+  is_active: boolean
+}
+
+export type RerankerProfileUpdate = Partial<RerankerProfileCreate> & {
+  clear_api_key?: boolean
+}

@@ -4,8 +4,10 @@ version = "0.1.0"
 description = "Lumen personal AI knowledge base and memory assistant backend"
 requires-python = ">=3.12"
 dependencies = [
+  "alembic>=1.13.0",
   "beautifulsoup4>=4.12.3",
   "celery>=5.4.0",
+  "cryptography>=42.0.0",
   "ebooklib>=0.18",
   "fastapi>=0.115.0",
   "httpx>=0.27.2",

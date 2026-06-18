@@ -1,6 +1,11 @@
 import type {
   ChatResponse,
   ChunkRead,
+  AgentProfileCreate,
+  AgentProfileRead,
+  AgentProfileUpdate,
+  AgentRunResponse,
+  AgentToolLogRead,
   FavoriteRead,
   GlobalSearchResultRead,
   IngestionBatchRead,
@@ -17,6 +22,9 @@ import type {
   MemoryUpdate,
   ReviewRead,
   RuntimeSettingsRead,
+  RerankerProfileCreate,
+  RerankerProfileRead,
+  RerankerProfileUpdate,
   SourceDetailRead,
   BulkUploadResult,
   SourceRead,
@@ -250,4 +258,22 @@ export const api = {
     request<MemoryRelationRead>(`/api/memories/duplicate-suggestions/${sourceMemoryId}/${targetMemoryId}/relate`, {
       method: 'POST',
     }),
+
+  listAgentProfiles: () => request<AgentProfileRead[]>('/api/agent/profiles'),
+  createAgentProfile: (payload: AgentProfileCreate) =>
+    request<AgentProfileRead>('/api/agent/profiles', { method: 'POST', body: JSON.stringify(payload) }),
+  updateAgentProfile: (profileId: number, payload: AgentProfileUpdate) =>
+    request<AgentProfileRead>(`/api/agent/profiles/${profileId}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  activateAgentProfile: (profileId: number) =>
+    request<AgentProfileRead>(`/api/agent/profiles/${profileId}/activate`, { method: 'POST' }),
+  runAgent: (message: string) =>
+    request<AgentRunResponse>('/api/agent/runs', { method: 'POST', body: JSON.stringify({ message }) }),
+  listAgentToolLogs: () => request<AgentToolLogRead[]>('/api/agent/tool-logs'),
+  listRerankerProfiles: () => request<RerankerProfileRead[]>('/api/agent/reranker-profiles'),
+  createRerankerProfile: (payload: RerankerProfileCreate) =>
+    request<RerankerProfileRead>('/api/agent/reranker-profiles', { method: 'POST', body: JSON.stringify(payload) }),
+  updateRerankerProfile: (profileId: number, payload: RerankerProfileUpdate) =>
+    request<RerankerProfileRead>(`/api/agent/reranker-profiles/${profileId}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  activateRerankerProfile: (profileId: number) =>
+    request<RerankerProfileRead>(`/api/agent/reranker-profiles/${profileId}/activate`, { method: 'POST' }),
 }

@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from service.api import chat, global_search, ingestion_jobs, memories, organization, review, search, settings, sources, status
+from service.api import agent, chat, global_search, ingestion_jobs, memories, organization, review, search, settings, sources, status
 
 router = APIRouter()
 
@@ -20,3 +20,4 @@ router.include_router(review.router)
 router.include_router(settings.router)
 router.include_router(organization.router)
 router.include_router(status.router)
+router.include_router(agent.router)

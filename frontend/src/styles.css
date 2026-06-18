@@ -400,6 +400,44 @@ p {
   min-width: 0;
 }
 
+.full-width-section {
+  grid-column: 1 / -1;
+}
+
+.agent-tool-grid {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+}
+
+.agent-tool-grid label {
+  align-items: center;
+  border: 1px solid var(--line);
+  display: flex;
+  gap: 0.5rem;
+  min-height: 42px;
+  padding: 0.55rem 0.7rem;
+}
+
+.agent-answer {
+  background: #f7fbf8;
+  border: 1px solid var(--line);
+  margin-top: 1rem;
+  padding: 0.9rem;
+}
+
+.agent-answer p {
+  margin: 0.45rem 0 0;
+  white-space: pre-wrap;
+}
+
+.tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.75rem;
+}
+
 .inline-fields {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(120px, 0.45fr);

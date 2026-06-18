@@ -340,6 +340,103 @@ describe('Lumen workbench', () => {
             },
           ])
         }
+        if (url.endsWith('/api/agent/profiles') && method === 'GET') {
+          return jsonResponse([
+            {
+              id: 71,
+              name: '只读研究 Agent',
+              instructions: '只使用已授权的只读工具；证据不足时说明不知道。',
+              enabled_tools: ['global_search', 'memory_search'],
+              require_approval: true,
+              is_active: true,
+              created_at: '2026-06-05T00:00:00',
+              updated_at: '2026-06-05T00:00:00',
+            },
+          ])
+        }
+        if (url.endsWith('/api/agent/profiles') && method === 'POST') {
+          return jsonResponse({
+            id: 72,
+            name: '只读研究 Agent',
+            instructions: '只使用已授权的只读工具；证据不足时说明不知道。',
+            enabled_tools: ['global_search', 'memory_search'],
+            require_approval: true,
+            is_active: true,
+            created_at: '2026-06-05T00:00:00',
+            updated_at: '2026-06-05T00:00:00',
+          })
+        }
+        if (url.endsWith('/api/agent/runs') && method === 'POST') {
+          return jsonResponse({
+            answer: '我运行了 全局搜索、记忆搜索。最相关资料是「全局搜索资料」。',
+            used_tools: ['global_search', 'memory_search'],
+            search_results: [],
+            memories: [],
+            graph: null,
+            tool_logs: [
+              {
+                id: 81,
+                profile_id: 71,
+                tool_name: 'global_search',
+                action: 'search',
+                input_json: '{"query":"Phase15"}',
+                result_summary: '返回 1 条结果',
+                status: 'succeeded',
+                error_message: null,
+                created_at: '2026-06-05T00:00:00',
+              },
+            ],
+          })
+        }
+        if (url.endsWith('/api/agent/tool-logs') && method === 'GET') {
+          return jsonResponse([
+            {
+              id: 81,
+              profile_id: 71,
+              tool_name: 'global_search',
+              action: 'search',
+              input_json: '{"query":"Phase15"}',
+              result_summary: '返回 1 条结果',
+              status: 'succeeded',
+              error_message: null,
+              created_at: '2026-06-05T00:00:00',
+            },
+          ])
+        }
+        if (url.endsWith('/api/agent/reranker-profiles') && method === 'GET') {
+          return jsonResponse([
+            {
+              id: 91,
+              name: '外部 reranker',
+              provider: 'openai-compatible',
+              base_url: 'https://rerank.example/v1',
+              model: 'rerank-test',
+              api_key_configured: true,
+              top_n: 20,
+              is_active: true,
+              status: 'configured',
+              last_error: null,
+              created_at: '2026-06-05T00:00:00',
+              updated_at: '2026-06-05T00:00:00',
+            },
+          ])
+        }
+        if (url.endsWith('/api/agent/reranker-profiles') && method === 'POST') {
+          return jsonResponse({
+            id: 92,
+            name: '外部 reranker',
+            provider: 'openai-compatible',
+            base_url: 'https://rerank.example/v1',
+            model: 'rerank-test',
+            api_key_configured: true,
+            top_n: 20,
+            is_active: true,
+            status: 'configured',
+            last_error: null,
+            created_at: '2026-06-05T00:00:00',
+            updated_at: '2026-06-05T00:00:00',
+          })
+        }
         if (url.endsWith('/api/tags') && method === 'GET') {
           return jsonResponse([
             {
@@ -1064,6 +1161,40 @@ describe('Lumen workbench', () => {
     await user.click(screen.getByRole('button', { name: '重试资料' }))
     expect(fetch).toHaveBeenCalledWith(
       'http://127.0.0.1:8000/api/sources/12/retry',
+      expect.objectContaining({ method: 'POST' }),
+    )
+  })
+
+  it('supports controlled Agent configuration runs and reranker setup', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(screen.getByRole('button', { name: 'Agent' }))
+
+    expect((await screen.findAllByText('只读研究 Agent')).length).toBeGreaterThan(0)
+    expect(screen.getByText('全局搜索、记忆搜索')).toBeInTheDocument()
+    expect(screen.getByText('外部 reranker · rerank-test')).toBeInTheDocument()
+    expect(screen.getByText('global_search · search')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '运行 Agent' }))
+    expect(await screen.findByText('我运行了 全局搜索、记忆搜索。最相关资料是「全局搜索资料」。')).toBeInTheDocument()
+    expect(fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:8000/api/agent/runs',
+      expect.objectContaining({ method: 'POST' }),
+    )
+
+    await user.click(screen.getByRole('button', { name: '保存并启用' }))
+    expect(fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:8000/api/agent/profiles',
+      expect.objectContaining({ method: 'POST' }),
+    )
+
+    await user.type(screen.getByLabelText('Base URL'), 'https://rerank.example/v1')
+    await user.type(screen.getByLabelText('模型'), 'rerank-test')
+    await user.type(screen.getByLabelText('API key'), 'reranker-secret')
+    await user.click(screen.getByRole('button', { name: '保存 reranker' }))
+    expect(fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:8000/api/agent/reranker-profiles',
       expect.objectContaining({ method: 'POST' }),
     )
   })

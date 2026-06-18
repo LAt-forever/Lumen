@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
 from service.config import Settings, get_settings
+from service.core.security import decrypt_secret, redact_text
 from service.core.llm import ChatCompletionError, HttpxChatCompletionClient, resolve_runtime_llm_config
 from service.db import get_db
 from service.models import LLMProviderProfile
@@ -138,12 +139,13 @@ def _read_profile(profile: LLMProviderProfile) -> LLMProviderProfileRead:
 def _test_provider_profile(profile: LLMProviderProfile) -> None:
     if profile.provider != "openai-compatible":
         raise ChatCompletionError(f"unsupported provider: {profile.provider}")
-    if not profile.api_key:
+    api_key = decrypt_secret(profile.api_key)
+    if not api_key:
         raise ChatCompletionError("API key 未配置。")
     client = HttpxChatCompletionClient(
         base_url=profile.base_url,
         model=profile.model,
-        api_key=profile.api_key,
+        api_key=api_key,
         timeout_seconds=profile.timeout_seconds,
     )
     client.complete([{"role": "user", "content": "请只回复 OK。"}])
@@ -151,6 +153,4 @@ def _test_provider_profile(profile: LLMProviderProfile) -> None:
 
 def _sanitize_provider_error(exc: Exception, profile: LLMProviderProfile) -> str:
     message = str(exc) or exc.__class__.__name__
-    if profile.api_key:
-        message = message.replace(profile.api_key, "[redacted]")
-    return message[:500]
+    return redact_text(message, [profile.api_key, decrypt_secret(profile.api_key)])[:500]

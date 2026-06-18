@@ -7,7 +7,7 @@ from celery import Celery
 from celery.signals import worker_ready
 
 from service import db as dbmod
-from service.config import get_settings
+from service.config import Settings
 from service.core.ingestion import IngestionService, parse_payload
 from service.repositories.chunks import ChunkRepository
 from service.repositories.ingestion_jobs import IngestionJobRepository
@@ -16,7 +16,7 @@ from service.schemas import WebCrawlRequest
 
 logger = logging.getLogger(__name__)
 
-settings = get_settings()
+settings = Settings()
 celery_app = Celery(
     "lumen",
     broker=settings.celery_broker_url,

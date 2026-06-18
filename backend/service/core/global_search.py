@@ -164,7 +164,7 @@ class GlobalSearchService:
         candidate_dates = self._date_terms(candidate.text)
         matched_dates = sorted(query_dates.intersection(candidate_dates))
         matched_date = matched_dates[0] if matched_dates else None
-        tag_matches = [tag.name for tag in tags if normalize_tag_name(tag.name) in query_terms or normalize_tag_name(tag.name) in lowered]
+        tag_matches = [tag.name for tag in tags if normalize_tag_name(tag.name) in query_terms]
         if not matched_terms and not matched_date and not tag_matches:
             return None
         score = float(len(matched_terms)) * 2.0

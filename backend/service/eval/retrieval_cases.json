@@ -1,0 +1,37 @@
+[
+  {
+    "id": "date-worklog",
+    "query": "2026年6月9日 Phase15 做了什么",
+    "expected_result_type": "source_chunk",
+    "expected_marker": "匹配日期",
+    "description": "Chinese date queries should retrieve the dated worklog chunk."
+  },
+  {
+    "id": "project-memory",
+    "query": "Phase15 组织和全局搜索项目",
+    "expected_result_type": "memory",
+    "expected_marker": "组织和全局搜索项目",
+    "description": "Project memory should be found by topic terms."
+  },
+  {
+    "id": "preference-memory",
+    "query": "Phase15 搜索结果显示中文匹配原因",
+    "expected_result_type": "memory",
+    "expected_marker": "中文匹配原因",
+    "description": "Preference memory should be found by user preference language."
+  },
+  {
+    "id": "answer-recall",
+    "query": "Phase15 收藏回答",
+    "expected_result_type": "message",
+    "expected_marker": "收藏回答",
+    "description": "Prior assistant answers should be searchable."
+  },
+  {
+    "id": "weak-evidence",
+    "query": "ZqxvNoMatchToken",
+    "expected_result_type": null,
+    "expected_marker": "",
+    "description": "Unrelated queries should return no top hit in the seeded corpus."
+  }
+]

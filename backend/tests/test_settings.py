@@ -108,6 +108,33 @@ def test_provider_profile_responses_omit_raw_api_key(client):
     assert "secret-key" not in listed.text
 
 
+def test_provider_profile_api_key_is_encrypted_at_rest(client):
+    from service.db import SessionLocal
+    from service.models import LLMProviderProfile
+
+    created = client.post(
+        "/api/settings/provider-profiles",
+        json={
+            "name": "Encrypted",
+            "provider": "openai-compatible",
+            "base_url": "https://api.example.test/v1",
+            "model": "gpt-test",
+            "api_key": "stored-secret-key",
+            "timeout_seconds": 12,
+            "fallback_enabled": True,
+            "is_active": True,
+        },
+    )
+
+    assert created.status_code == 200
+    with SessionLocal() as db:
+        profile = db.get(LLMProviderProfile, created.json()["id"])
+        assert profile is not None
+        assert profile.api_key is not None
+        assert profile.api_key.startswith("lumen:v1:")
+        assert "stored-secret-key" not in profile.api_key
+
+
 def test_provider_profile_update_preserves_or_clears_key(client):
     profile = client.post(
         "/api/settings/provider-profiles",

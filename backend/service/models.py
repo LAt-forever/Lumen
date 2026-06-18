@@ -206,3 +206,51 @@ class LLMProviderProfile(Base):
     last_checked_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class AgentProfile(Base):
+    __tablename__ = "agent_profiles"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    instructions: Mapped[str] = mapped_column(Text, nullable=False)
+    enabled_tools_json: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
+    require_approval: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    tool_logs: Mapped[list["AgentToolLog"]] = relationship(back_populates="profile")
+
+
+class AgentToolLog(Base):
+    __tablename__ = "agent_tool_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    profile_id: Mapped[Optional[int]] = mapped_column(ForeignKey("agent_profiles.id"), nullable=True, index=True)
+    tool_name: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    action: Mapped[str] = mapped_column(String(120), nullable=False)
+    input_json: Mapped[str] = mapped_column(Text, default="{}", nullable=False)
+    result_summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(40), default="succeeded", nullable=False, index=True)
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
+
+    profile: Mapped[Optional[AgentProfile]] = relationship(back_populates="tool_logs")
+
+
+class RerankerProfile(Base):
+    __tablename__ = "reranker_profiles"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    provider: Mapped[str] = mapped_column(String(80), default="openai-compatible", nullable=False)
+    base_url: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+    model: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    api_key: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    top_n: Mapped[int] = mapped_column(Integer, default=20, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    status: Mapped[str] = mapped_column(String(40), default="configured", nullable=False)
+    last_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)

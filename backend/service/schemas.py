@@ -20,6 +20,7 @@ TagSuggestionStatus = Literal["pending", "confirmed", "ignored"]
 GlobalSearchResultType = Literal["source_chunk", "source", "memory", "message"]
 IngestionJobStatus = Literal["queued", "running", "succeeded", "failed", "canceled"]
 IngestionJobType = Literal["note", "upload", "link", "crawl", "bookmark", "index", "retry"]
+AgentToolName = Literal["global_search", "memory_search", "memory_graph"]
 
 
 class SourceCreate(BaseModel):
@@ -361,6 +362,100 @@ class LLMProviderProfileUpdate(BaseModel):
     model: str | None = Field(default=None, min_length=1, max_length=200)
     api_key: str | None = None
     clear_api_key: bool = False
+
+
+class AgentProfileCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    instructions: str = Field(default="只使用已授权的只读工具；证据不足时说明不知道。", min_length=1)
+    enabled_tools: list[AgentToolName] = Field(default_factory=lambda: ["global_search", "memory_search"])
+    require_approval: bool = True
+    is_active: bool = False
+
+
+class AgentProfileUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    instructions: str | None = Field(default=None, min_length=1)
+    enabled_tools: list[AgentToolName] | None = None
+    require_approval: bool | None = None
+    is_active: bool | None = None
+
+
+class AgentProfileRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    instructions: str
+    enabled_tools: list[str]
+    require_approval: bool
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class AgentToolLogRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    profile_id: int | None
+    tool_name: str
+    action: str
+    input_json: str
+    result_summary: str | None
+    status: str
+    error_message: str | None
+    created_at: datetime
+
+
+class AgentRunRequest(BaseModel):
+    message: str = Field(min_length=1)
+
+
+class AgentRunResponse(BaseModel):
+    answer: str
+    used_tools: list[str]
+    search_results: list[GlobalSearchResultRead] = Field(default_factory=list)
+    memories: list[MemoryRead] = Field(default_factory=list)
+    graph: MemoryGraphRead | None = None
+    tool_logs: list[AgentToolLogRead] = Field(default_factory=list)
+
+
+class RerankerProfileCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    provider: str = Field(default="openai-compatible", min_length=1, max_length=80)
+    base_url: str | None = Field(default=None, max_length=1000)
+    model: str | None = Field(default=None, max_length=200)
+    api_key: str | None = None
+    top_n: int = Field(default=20, ge=1, le=200)
+    is_active: bool = False
+
+
+class RerankerProfileUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    provider: str | None = Field(default=None, min_length=1, max_length=80)
+    base_url: str | None = Field(default=None, max_length=1000)
+    model: str | None = Field(default=None, max_length=200)
+    api_key: str | None = None
+    top_n: int | None = Field(default=None, ge=1, le=200)
+    is_active: bool | None = None
+    clear_api_key: bool = False
+
+
+class RerankerProfileRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    provider: str
+    base_url: str | None
+    model: str | None
+    api_key_configured: bool
+    top_n: int
+    is_active: bool
+    status: str
+    last_error: str | None
+    created_at: datetime
+    updated_at: datetime
     timeout_seconds: float | None = Field(default=None, gt=0)
     fallback_enabled: bool | None = None
     is_active: bool | None = None

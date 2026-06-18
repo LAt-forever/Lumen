@@ -2,6 +2,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api } from './client'
 import type {
+  AgentProfileCreate,
+  AgentProfileRead,
+  AgentProfileUpdate,
+  AgentRunResponse,
+  AgentToolLogRead,
   BulkUploadResult,
   ChatResponse,
   ChunkRead,
@@ -21,6 +26,8 @@ import type {
   MemoryUpdate,
   ReviewRead,
   RuntimeSettingsRead,
+  RerankerProfileCreate,
+  RerankerProfileRead,
   SourceDetailRead,
   SourceRead,
   StatusSummaryRead,
@@ -527,6 +534,88 @@ export function usePromoteDuplicateToRelation() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['memories', 'duplicates'] })
       await queryClient.invalidateQueries({ queryKey: ['memory-graph'] })
+    },
+  })
+}
+
+export function useAgentProfiles() {
+  return useQuery<AgentProfileRead[]>({
+    queryKey: ['agent', 'profiles'],
+    queryFn: () => api.listAgentProfiles(),
+  })
+}
+
+export function useCreateAgentProfile() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (payload: AgentProfileCreate) => api.createAgentProfile(payload),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['agent'] })
+    },
+  })
+}
+
+export function useUpdateAgentProfile() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ profileId, payload }: { profileId: number; payload: AgentProfileUpdate }) =>
+      api.updateAgentProfile(profileId, payload),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['agent'] })
+    },
+  })
+}
+
+export function useActivateAgentProfile() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: api.activateAgentProfile,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['agent'] })
+    },
+  })
+}
+
+export function useRunAgent() {
+  const queryClient = useQueryClient()
+  return useMutation<AgentRunResponse, Error, string>({
+    mutationFn: api.runAgent,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['agent', 'tool-logs'] })
+    },
+  })
+}
+
+export function useAgentToolLogs() {
+  return useQuery<AgentToolLogRead[]>({
+    queryKey: ['agent', 'tool-logs'],
+    queryFn: () => api.listAgentToolLogs(),
+  })
+}
+
+export function useRerankerProfiles() {
+  return useQuery<RerankerProfileRead[]>({
+    queryKey: ['agent', 'reranker-profiles'],
+    queryFn: () => api.listRerankerProfiles(),
+  })
+}
+
+export function useCreateRerankerProfile() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (payload: RerankerProfileCreate) => api.createRerankerProfile(payload),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['agent', 'reranker-profiles'] })
+    },
+  })
+}
+
+export function useActivateRerankerProfile() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: api.activateRerankerProfile,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['agent', 'reranker-profiles'] })
     },
   })
 }

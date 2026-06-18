@@ -5,11 +5,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from service.api.router import router
+from service.core.security import configure_log_redaction
 from service.db import init_db
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    configure_log_redaction()
     init_db()
     yield
 

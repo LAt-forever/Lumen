@@ -7,6 +7,7 @@ from urllib.parse import urljoin
 import httpx
 
 from service.config import Settings
+from service.core.security import decrypt_secret
 from service.models import LLMProviderProfile
 from service.schemas import AnswerMode, ChunkRead
 
@@ -289,7 +290,7 @@ def resolve_runtime_llm_config(settings: Settings, active_profile: LLMProviderPr
             provider=active_profile.provider,
             base_url=active_profile.base_url,
             model=active_profile.model,
-            api_key=active_profile.api_key,
+            api_key=decrypt_secret(active_profile.api_key),
             timeout_seconds=active_profile.timeout_seconds,
             fallback_enabled=active_profile.fallback_enabled,
             runtime_source="database-profile",

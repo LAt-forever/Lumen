@@ -3,6 +3,7 @@ import type { LucideIcon } from 'lucide-react'
 
 import { useRuntimeSettings } from '../api/hooks'
 import type { ChatResponse } from '../api/types'
+import { AgentPanel } from './AgentPanel'
 import { CapturePanel } from './CapturePanel'
 import { ChatPanel } from './ChatPanel'
 import { ContextPanel } from './ContextPanel'
@@ -16,7 +17,7 @@ import { SettingsPanel } from './SettingsPanel'
 import { SourceList } from './SourceList'
 import { StatusPanel } from './StatusPanel'
 
-export type ViewKey = 'today' | 'ask' | 'library' | 'memory' | 'graph' | 'search' | 'review' | 'status' | 'settings'
+export type ViewKey = 'today' | 'ask' | 'library' | 'memory' | 'graph' | 'agent' | 'search' | 'review' | 'status' | 'settings'
 
 export type NavItem = {
   label: string
@@ -95,6 +96,9 @@ export function AppShell({ navItems }: AppShellProps) {
     }
     if (activeView === 'graph') {
       return <MemoryGraphPanel />
+    }
+    if (activeView === 'agent') {
+      return <AgentPanel />
     }
     if (activeView === 'search') {
       return <SearchPanel />

@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from service.core.security import encrypt_secret
 from service.models import LLMProviderProfile
 from service.schemas import LLMProviderProfileCreate, LLMProviderProfileUpdate
 
@@ -106,4 +107,4 @@ class ProviderProfileRepository:
         if api_key is None:
             return None
         stripped = api_key.strip()
-        return stripped or None
+        return encrypt_secret(stripped) if stripped else None
