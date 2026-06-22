@@ -205,6 +205,8 @@ docker compose up --build
 - Elasticsearch：http://127.0.0.1:9200/
 - Neo4j Browser：http://127.0.0.1:7474/，默认账号 `neo4j`，密码 `lumen-password`
 
+这些默认账号/密码和 Elasticsearch 关闭安全认证仅用于本地开发，不要用于生产或共享网络环境。
+
 健康检查：
 
 ```bash
@@ -213,7 +215,7 @@ curl -s http://127.0.0.1:8000/healthz
 
 ### Phase 0 全栈健康检查
 
-全面对标 Comet 后，默认 Compose 栈会启动 PostgreSQL、Redis、Elasticsearch、Neo4j、backend、worker、beat 和 frontend。
+Phase 0 对标 Comet 的默认 Compose 栈会启动 PostgreSQL、Redis、Elasticsearch、Neo4j、backend、worker、beat 和 frontend。
 
 ```bash
 docker compose ps
