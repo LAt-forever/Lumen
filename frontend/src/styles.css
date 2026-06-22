@@ -540,6 +540,67 @@ p {
   padding-top: 10px;
 }
 
+.platform-services {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.section-heading-row {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.service-health-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.service-health-card {
+  align-items: flex-start;
+  background: #ffffff;
+  border: 1px solid #d8dee9;
+  border-radius: 8px;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  min-height: 96px;
+  padding: 14px;
+}
+
+.service-health-card p {
+  color: #5f6b7a;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  margin: 6px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.service-status {
+  border-radius: 999px;
+  flex: 0 0 auto;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 4px 8px;
+}
+
+.service-status.ok {
+  background: #e8f7ed;
+  color: #1e7a3a;
+}
+
+.service-status.degraded {
+  background: #fff4d6;
+  color: #8a5a00;
+}
+
+.service-status.unavailable {
+  background: #ffe4e4;
+  color: #9f1d1d;
+}
+
 .ingestion-panel {
   display: grid;
   gap: 12px;

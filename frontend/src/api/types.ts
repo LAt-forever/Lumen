@@ -175,8 +175,18 @@ export type GlobalSearchResultRead = EvidenceMatch & {
   created_at: string
 }
 
+export type ServiceHealthRead = {
+  name: 'postgres' | 'redis' | 'elasticsearch' | 'neo4j' | 'worker' | 'beat' | string
+  label: string
+  status: 'ok' | 'degraded' | 'unavailable' | 'not_configured'
+  detail: string
+  latency_ms: number | null
+  checked_at: string
+}
+
 export type StatusSummaryRead = {
   runtime: RuntimeSettingsRead
+  services: ServiceHealthRead[]
   source_counts: {
     total: number
     indexed: number

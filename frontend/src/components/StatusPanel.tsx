@@ -1,6 +1,19 @@
 import { useRetrySource, useStatusSummary } from '../api/hooks'
 import { IngestionProgressPanel } from './IngestionProgressPanel'
 
+function serviceStatusLabel(status: string) {
+  if (status === 'ok') return '正常'
+  if (status === 'degraded') return '降级'
+  if (status === 'not_configured') return '未配置'
+  return '不可用'
+}
+
+function serviceStatusClass(status: string) {
+  if (status === 'ok') return 'service-status ok'
+  if (status === 'degraded') return 'service-status degraded'
+  return 'service-status unavailable'
+}
+
 export function StatusPanel() {
   const { data: status } = useStatusSummary()
   const retrySource = useRetrySource()
@@ -40,6 +53,24 @@ export function StatusPanel() {
           <p>索引失败：{status.source_counts.failed}</p>
           <p>标签建议：{status.pending_tag_suggestion_count}</p>
         </article>
+      </div>
+
+      <div className="platform-services">
+        <div className="section-heading-row">
+          <strong>平台服务</strong>
+          <span>{status.services.length}</span>
+        </div>
+        <div className="service-health-grid">
+          {status.services.map((service) => (
+            <article className="service-health-card" key={service.name}>
+              <div>
+                <strong>{service.label}</strong>
+                <p>{service.detail}</p>
+              </div>
+              <span className={serviceStatusClass(service.status)}>{serviceStatusLabel(service.status)}</span>
+            </article>
+          ))}
+        </div>
       </div>
 
       <IngestionProgressPanel mode="full" />

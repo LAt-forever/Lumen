@@ -595,6 +595,56 @@ describe('Lumen workbench', () => {
               active_profile_id: null,
               active_profile_name: null,
             },
+            services: [
+              {
+                name: 'postgres',
+                label: 'PostgreSQL',
+                status: 'ok',
+                detail: 'SELECT 1 succeeded',
+                latency_ms: 1.2,
+                checked_at: '2026-06-22T00:00:00Z',
+              },
+              {
+                name: 'redis',
+                label: 'Redis',
+                status: 'ok',
+                detail: 'PING succeeded',
+                latency_ms: 2.3,
+                checked_at: '2026-06-22T00:00:00Z',
+              },
+              {
+                name: 'elasticsearch',
+                label: 'Elasticsearch',
+                status: 'unavailable',
+                detail: 'connection refused',
+                latency_ms: null,
+                checked_at: '2026-06-22T00:00:00Z',
+              },
+              {
+                name: 'neo4j',
+                label: 'Neo4j',
+                status: 'unavailable',
+                detail: 'connection refused',
+                latency_ms: null,
+                checked_at: '2026-06-22T00:00:00Z',
+              },
+              {
+                name: 'worker',
+                label: 'Celery Worker',
+                status: 'unavailable',
+                detail: 'no worker replied',
+                latency_ms: null,
+                checked_at: '2026-06-22T00:00:00Z',
+              },
+              {
+                name: 'beat',
+                label: 'Celery Beat',
+                status: 'unavailable',
+                detail: 'heartbeat file not found',
+                latency_ms: null,
+                checked_at: '2026-06-22T00:00:00Z',
+              },
+            ],
             source_counts: { total: 2, indexed: 1, failed: 1, pending: 0, parsing: 0 },
             ingestion_jobs: { queued: 0, running: 1, succeeded: 0, failed: 1, canceled: 0 },
             failed_sources: [
@@ -1138,6 +1188,10 @@ describe('Lumen workbench', () => {
     await user.click(within(screen.getByRole('navigation', { name: '主导航' })).getByRole('button', { name: '状态' }))
 
     expect(await screen.findByText('系统状态')).toBeInTheDocument()
+    expect(await screen.findByText('平台服务')).toBeInTheDocument()
+    expect(screen.getByText('PostgreSQL')).toBeInTheDocument()
+    expect(screen.getByText('Elasticsearch')).toBeInTheDocument()
+    expect(screen.getByText('Celery Beat')).toBeInTheDocument()
     expect(screen.getByText('索引失败：1')).toBeInTheDocument()
     expect(screen.getByText('标签建议：2')).toBeInTheDocument()
     expect(screen.getByText('失败链接')).toBeInTheDocument()
