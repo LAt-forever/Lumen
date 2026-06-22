@@ -202,12 +202,29 @@ docker compose up --build
 - 后端：http://127.0.0.1:8000/
 - Postgres：127.0.0.1:5432
 - Redis：127.0.0.1:6379
+- Elasticsearch：http://127.0.0.1:9200/
+- Neo4j Browser：http://127.0.0.1:7474/，默认账号 `neo4j`，密码 `lumen-password`
 
 健康检查：
 
 ```bash
 curl -s http://127.0.0.1:8000/healthz
 ```
+
+### Phase 0 全栈健康检查
+
+全面对标 Comet 后，默认 Compose 栈会启动 PostgreSQL、Redis、Elasticsearch、Neo4j、backend、worker、beat 和 frontend。
+
+```bash
+docker compose ps
+curl -s http://127.0.0.1:8000/api/status
+```
+
+期望：
+
+- `docker compose ps` 中 `postgres`、`redis`、`elasticsearch`、`neo4j`、`backend`、`worker`、`beat`、`frontend` 均在运行。
+- `/api/status` 的 `services` 字段包含 `postgres`、`redis`、`elasticsearch`、`neo4j`、`worker`、`beat`。
+- 前端「状态」页展示「平台服务」卡片。
 
 摄取队列 smoke：
 
