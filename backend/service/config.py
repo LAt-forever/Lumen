@@ -23,6 +23,14 @@ class Settings(BaseSettings):
     upload_storage_path: str = "data/uploads"
     tesseract_cmd: str | None = None
     playwright_enabled: bool = True
+    elasticsearch_url: str = "http://127.0.0.1:9200"
+    neo4j_http_url: str = "http://127.0.0.1:7474"
+    neo4j_bolt_url: str = "bolt://127.0.0.1:7687"
+    neo4j_user: str = "neo4j"
+    neo4j_password: str = "lumen-password"
+    service_health_timeout_seconds: float = 2.0
+    beat_heartbeat_path: Path | None = None
+    beat_heartbeat_max_age_seconds: int = 90
 
     model_config = SettingsConfigDict(env_prefix="LUMEN_", env_file=".env", extra="ignore")
 
