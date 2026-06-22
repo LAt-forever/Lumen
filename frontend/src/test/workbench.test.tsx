@@ -1219,6 +1219,50 @@ describe('Lumen workbench', () => {
     )
   })
 
+  it('renders status view when service health payload is missing', async () => {
+    const defaultFetch = vi.mocked(fetch).getMockImplementation()
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      const method = init?.method ?? 'GET'
+
+      if (url.endsWith('/api/status') && method === 'GET') {
+        return jsonResponse({
+          runtime: {
+            llm_mode: 'llm',
+            llm_provider: 'openai-compatible',
+            llm_model: 'gpt-test',
+            llm_configured: true,
+            llm_fallback_enabled: true,
+            embedding_mode: 'hash',
+            configuration_hint: null,
+            latest_fallback_reason: null,
+            runtime_source: 'environment',
+            active_profile_id: null,
+            active_profile_name: null,
+          },
+          source_counts: { total: 2, indexed: 1, failed: 1, pending: 0, parsing: 0 },
+          ingestion_jobs: { queued: 0, running: 1, succeeded: 0, failed: 1, canceled: 0 },
+          failed_sources: [],
+          pending_tag_suggestion_count: 0,
+          latest_fallback_reason: null,
+          suggested_actions: [],
+        })
+      }
+
+      if (!defaultFetch) throw new Error(`Unhandled request: ${url}`)
+      return defaultFetch(input, init)
+    })
+
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(within(screen.getByRole('navigation', { name: '主导航' })).getByRole('button', { name: '状态' }))
+
+    const platformServices = await screen.findByText('平台服务')
+    expect(platformServices).toBeInTheDocument()
+    expect(within(platformServices.parentElement ?? document.body).getByText('0')).toBeInTheDocument()
+  })
+
   it('supports controlled Agent configuration runs and reranker setup', async () => {
     const user = userEvent.setup()
     render(<App />)

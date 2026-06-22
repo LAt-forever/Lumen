@@ -570,6 +570,10 @@ p {
   padding: 14px;
 }
 
+.service-health-card > div {
+  min-width: 0;
+}
+
 .service-health-card p {
   color: #5f6b7a;
   font-size: 0.9rem;

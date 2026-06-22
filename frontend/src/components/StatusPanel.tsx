@@ -27,6 +27,8 @@ export function StatusPanel() {
     )
   }
 
+  const services = status.services ?? []
+
   return (
     <section className="center-panel full-span" aria-label="系统状态">
       <div className="panel-header">
@@ -58,10 +60,10 @@ export function StatusPanel() {
       <div className="platform-services">
         <div className="section-heading-row">
           <strong>平台服务</strong>
-          <span>{status.services.length}</span>
+          <span>{services.length}</span>
         </div>
         <div className="service-health-grid">
-          {status.services.map((service) => (
+          {services.map((service) => (
             <article className="service-health-card" key={service.name}>
               <div>
                 <strong>{service.label}</strong>

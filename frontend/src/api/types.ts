@@ -176,7 +176,7 @@ export type GlobalSearchResultRead = EvidenceMatch & {
 }
 
 export type ServiceHealthRead = {
-  name: 'postgres' | 'redis' | 'elasticsearch' | 'neo4j' | 'worker' | 'beat' | string
+  name: string
   label: string
   status: 'ok' | 'degraded' | 'unavailable' | 'not_configured'
   detail: string
