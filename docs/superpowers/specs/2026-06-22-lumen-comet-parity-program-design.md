@@ -1,264 +1,264 @@
-# Lumen Comet Parity Program Design
+# Lumen 全面对标 Comet 计划设计
 
-Date: 2026-06-22
+日期：2026-06-22
 
-## Summary
+## 概要
 
-Lumen will move from a local-first prototype into a full Comet-class personal AI knowledge base and agent platform. The target is complete capability parity with the Comet open source repository, without discounting heavy infrastructure, multi-user product surfaces, graph storage, advanced retrieval, autonomous agent workflows, or secondary product modules.
+Lumen 将从本地优先原型升级为 Comet 同级的个人 AI 知识库与 Agent 平台。目标是完整对标 Comet 开源仓库的能力范围，不因基础设施较重、多用户复杂、图数据库、检索成本、Agent 自主性或二级产品模块而打折扣。
 
-This spec supersedes the earlier "light prototype first" framing. Existing Lumen strengths remain part of the target product:
+这份规格取代早期“先做轻量原型”的长期边界。Lumen 已经做对的能力继续保留，并成为目标产品的核心气质：
 
-- Evidence-grounded answers with visible citations.
-- Explicit memory confirmation, editing, merging, forgetting, and provenance.
-- Durable ingestion progress and repair surfaces.
-- Auditable tool logs and controlled configuration.
-- Chinese-first product copy.
+- 有证据支撑的回答和可见引用。
+- 显式可控的记忆确认、编辑、合并、遗忘和来源追踪。
+- 持久摄取进度、失败修复和状态面板。
+- 可审计的工具日志和受控配置。
+- 中文优先的产品文案和日常使用体验。
 
-The new target adds the full Comet-level platform shape:
+新的目标形态补齐完整 Comet 级平台能力：
 
-- Multi-user authentication and user-scoped data isolation.
-- PostgreSQL, Elasticsearch, Neo4j, Redis, Celery worker, and Celery beat in the default local stack.
-- Real embedding, hybrid retrieval, reranking, and rebuildable search indexes.
-- Neo4j-backed memory graph with entities, triples, events, provenance, timeline, and visualization.
-- Multi-knowledge-base management, image knowledge, sharing, tags, favorites, global search, dashboard, and status.
-- Agent configuration, tools, MCP servers, Skills, research tasks, ReAct or function-calling execution, and task logs.
-- Persona, persona groups, group chat, notifications, model configuration, music, and emotion-related product surfaces matching Comet's module map.
+- 多用户认证和用户级数据隔离。
+- 默认本地栈包含 PostgreSQL、Elasticsearch、Neo4j、Redis、Celery worker、Celery beat。
+- 真实 embedding、混合检索、rerank 和可重建搜索索引。
+- Neo4j 支撑的记忆图谱，包括实体、三元组、事件、来源、时间线和可视化。
+- 多知识库、图片知识库、分享、标签、收藏、全局搜索、仪表盘和状态页。
+- Agent 配置、工具、MCP server、Skills、研究任务、ReAct 或 function calling 执行和任务日志。
+- Persona、Persona Group、群聊、通知、模型配置、音乐、情绪等 Comet 模块地图中的产品面。
 
-## Product Decision
+## 产品决策
 
-Lumen will not fork Comet or copy its source as the main approach. Lumen will evolve its current codebase into the same product class while keeping local code ownership, existing tests, and Lumen's trust-oriented interaction model.
+Lumen 不以 fork Comet 或复制 Comet 源码作为主路线。Lumen 会在现有代码库上演进到同一产品级别，同时保留本地代码所有权、已有测试和 Lumen 强调可信度的交互模型。
 
-The approved execution strategy is evolutionary full parity:
+已确认的执行策略是：**演进式全量对标**。
 
-1. Keep the application runnable after each phase.
-2. Upgrade the runtime stack before building features that depend on it.
-3. Build each capability as a complete vertical slice: data model, service, API, worker behavior, frontend route, tests, and smoke flow.
-4. Treat every Comet-visible domain as in scope unless explicitly removed by a future user-approved scope change.
+1. 每个阶段结束后应用都必须可运行。
+2. 先升级依赖的运行栈，再建设依赖该栈的功能。
+3. 每个能力都按完整纵切交付：数据模型、服务层、API、worker 行为、前端入口、测试和 smoke 流程。
+4. Comet 中用户可见的每个领域都纳入范围，除非未来经过用户明确批准调整范围。
 
-## Parity Definition
+## 对标定义
 
-A capability counts as parity only when all of the following are true:
+一个能力只有同时满足以下条件，才算完成对标：
 
-- The user can access it from the frontend through a stable route or workflow.
-- The backend exposes durable API endpoints for the workflow.
-- Data is persisted in the appropriate store with user isolation.
-- Background work is durable and visible when the workflow is asynchronous.
-- Search, graph, and derived projections can be rebuilt from primary records.
-- Failures are visible and retryable where retry makes sense.
-- Tests cover the core service behavior and at least one API path.
-- A smoke flow is documented in README or a phase-specific acceptance section.
+- 用户可以在前端通过稳定路由或工作流访问。
+- 后端提供持久 API 端点支撑该工作流。
+- 数据持久化到正确存储，并带用户隔离。
+- 异步流程有持久任务状态，并能在界面查看。
+- 搜索、图谱和其他派生投影可以从主记录重建。
+- 失败状态可见；适合重试的失败必须可重试。
+- 测试覆盖核心服务行为和至少一条 API 路径。
+- README 或阶段验收文档记录 smoke 流程。
 
-## Goals
+## 目标
 
-- Make Lumen a Comet-class platform, not a narrower local knowledge prototype.
-- Adopt the full multi-service runtime: PostgreSQL, Redis, Elasticsearch, Neo4j, backend, worker, scheduler, frontend.
-- Replace hash embeddings and keyword gates with real embeddings, ES BM25/vector retrieval, and reranking.
-- Replace rule-only memory extraction with LLM-structured memory extraction while keeping user confirmation controls.
-- Use Neo4j for memory graph queries, visualization, community-style exploration, and timeline/event reasoning.
-- Add full multi-user authentication and user-level data isolation across relational, search, graph, file, and worker boundaries.
-- Add Comet-level Agent, MCP, Skills, research, persona, group chat, dashboard, notifications, model configuration, sharing, image, music, and emotion surfaces.
-- Keep evidence visibility, provenance, approval, and audit logs as first-class Lumen product values.
+- 把 Lumen 做成 Comet 同级平台，而不是范围更窄的本地知识库原型。
+- 采用完整多服务运行栈：PostgreSQL、Redis、Elasticsearch、Neo4j、backend、worker、scheduler、frontend。
+- 用真实 embedding、ES BM25/vector 检索和 rerank 替换 hash embedding 和关键词门控。
+- 用 LLM 结构化记忆抽取替换规则式记忆抽取，同时保留用户确认机制。
+- 用 Neo4j 支撑记忆图谱查询、可视化、社区式探索和时间线/事件推理。
+- 加入完整多用户认证，以及关系库、搜索、图谱、文件和 worker 边界上的用户隔离。
+- 补齐 Comet 级 Agent、MCP、Skills、研究、Persona、群聊、仪表盘、通知、模型配置、分享、图片、音乐和情绪模块。
+- 继续把证据可见性、来源追踪、审批和审计日志作为 Lumen 的一等产品价值。
 
-## Non-Goals
+## 非目标
 
-- No direct source-code fork of Comet as the primary architecture.
-- No hidden global data access in the name of speed.
-- No "demo-only" feature that bypasses persistence, user isolation, or tests.
-- No replacement of existing Lumen trust controls with silent automation.
-- No removal of existing Lumen workflows until the parity replacement is functional.
+- 不把直接 fork Comet 作为主架构路线。
+- 不为了速度引入隐藏的全局数据访问。
+- 不接受绕过持久化、用户隔离或测试的 demo-only 功能。
+- 不用静默自动化替代 Lumen 已有的记忆确认和可信控制。
+- 在替代能力可用前，不移除现有 Lumen 工作流。
 
-## Current Lumen State
+## 当前 Lumen 状态
 
-Lumen already has a useful base:
+Lumen 已经有可用底座：
 
-- FastAPI backend with SQLAlchemy, Alembic, Celery, Redis, PostgreSQL when configured, and SQLite fallback.
-- React frontend with React Query, React Flow, d3-force, and a Chinese workspace UI.
-- Durable ingestion jobs for notes, uploads, links, crawls, and bookmarks.
-- Parsers for text, markdown, PDF, DOCX, EPUB, images, web links, crawls, and bookmark HTML.
-- Extractive answers and OpenAI-compatible LLM answers when configured, both with citations.
-- Memory candidates, confirmed memories, manual relations, graph visualization, duplicate suggestions, tags, favorites, global search, status, settings, and controlled Agent tools.
-- Retrieval evaluation seed command and smoke guidance.
+- FastAPI 后端，使用 SQLAlchemy、Alembic、Celery、Redis，可配置 PostgreSQL，并保留 SQLite fallback。
+- React 前端，使用 React Query、React Flow、d3-force，并已有中文工作台界面。
+- 笔记、上传、链接、深度抓取、书签导入的持久摄取任务。
+- 文本、Markdown、PDF、DOCX、EPUB、图片、网页链接、深度抓取、书签 HTML parser。
+- 摘录式回答，以及配置后可用的 OpenAI-compatible LLM 回答；两者都带引用。
+- 记忆候选、确认记忆、手动关系、图谱可视化、重复建议、标签、收藏、全局搜索、状态页、设置页和受控 Agent 工具。
+- 检索评测 seed 命令和 smoke 指南。
 
-Important current limitations:
+当前关键限制：
 
-- Retrieval still uses hash embeddings and in-process keyword/date scoring.
-- Memory extraction is mostly deterministic keyword classification.
-- Memory graph is stored relationally, not in Neo4j.
-- Agent runs preselected read-only tools and does not perform autonomous multi-step planning.
-- There is no multi-user authentication or cross-store user isolation.
-- The default compose stack does not include Elasticsearch or Neo4j.
-- Product surfaces such as persona, group chat, Skills, MCP management, research, notifications, music, and emotion modules are absent or not equivalent.
+- 检索仍使用 hash embedding 和进程内关键词/日期排序。
+- 记忆抽取主要是确定性关键词分类。
+- 记忆图谱存储在关系库，不在 Neo4j。
+- Agent 只能运行预选只读工具，不具备自主多步规划。
+- 没有多用户认证，也没有跨存储用户隔离。
+- 默认 compose 栈没有 Elasticsearch 和 Neo4j。
+- Persona、群聊、Skills、MCP 管理、研究、通知、音乐、情绪等产品模块缺失或不等价。
 
-## Target Runtime Architecture
+## 目标运行架构
 
-The default development and product stack contains:
+默认开发和产品运行栈包含：
 
-- `postgres`: primary transactional database for users, sources, conversations, memory metadata, model configuration, agent configuration, jobs, tags, favorites, shares, and audit logs.
-- `redis`: Celery broker, Celery result backend, short-lived caches, and coordination primitives.
-- `elasticsearch`: full-text, vector, hybrid, and global search index. It uses Chinese-capable analysis where available and stores only rebuildable search projections.
-- `neo4j`: memory graph, entity graph, triple graph, event graph, provenance paths, and graph analytics projections.
-- `backend`: FastAPI API service.
-- `worker`: Celery worker for ingestion, embedding, indexing, memory extraction, graph sync, research, notification, and rebuild tasks.
-- `beat`: Celery beat scheduler for periodic maintenance, retries, refreshes, and reminder-style tasks.
-- `frontend`: React/Vite frontend.
+- `postgres`：用户、资料、会话、记忆元数据、模型配置、Agent 配置、任务、标签、收藏、分享、审计日志等事务型主数据库。
+- `redis`：Celery broker、Celery result backend、短期缓存和协调原语。
+- `elasticsearch`：全文、向量、混合检索和全局搜索索引。它应使用中文友好的 analyzer，并只保存可重建的搜索投影。
+- `neo4j`：记忆图谱、实体图谱、三元组图谱、事件图谱、来源路径和图分析投影。
+- `backend`：FastAPI API 服务。
+- `worker`：Celery worker，处理摄取、embedding、索引、记忆抽取、图谱同步、研究、通知和重建任务。
+- `beat`：Celery beat scheduler，处理周期性维护、重试、刷新和提醒类任务。
+- `frontend`：React/Vite 前端。
 
-SQLite remains allowed only as a legacy emergency mode for narrow development checks. It is not the target stack for Comet parity.
+SQLite 只作为历史兼容和窄范围开发检查的应急模式。Comet 对标目标栈不以 SQLite 为准。
 
-## Data Ownership
+## 数据所有权
 
-PostgreSQL is the primary source of truth for business records:
+PostgreSQL 是业务记录的主事实来源：
 
-- users and auth records
-- knowledge bases
-- sources and file metadata
-- conversations and messages
-- memory candidates and memory decisions
-- model/provider/agent/tool/skill configuration
-- jobs and audit logs
-- tags, favorites, shares, notifications, and product metadata
+- 用户和认证记录。
+- 知识库。
+- 资料和文件元数据。
+- 会话和消息。
+- 记忆候选和记忆决策。
+- 模型、provider、Agent、工具和 Skill 配置。
+- 任务和审计日志。
+- 标签、收藏、分享、通知和产品元数据。
 
-Elasticsearch is the search projection:
+Elasticsearch 是搜索投影：
 
-- source chunks
-- image descriptions and OCR text
-- conversations and assistant answers
-- memories and graph-derived summaries
-- tags and favorite boost signals
-- global search documents
+- 资料 chunk。
+- 图片描述和 OCR 文本。
+- 会话和助手回答。
+- 记忆和图谱派生摘要。
+- 标签和收藏 boost 信号。
+- 全局搜索文档。
 
-Neo4j is the graph query projection:
+Neo4j 是图查询投影：
 
-- memory nodes
-- entities
-- relations/triples
-- events and time anchors
-- source/message provenance nodes
-- merge lineage and contradiction/support edges
-- user and knowledge-base scoping properties
+- 记忆节点。
+- 实体。
+- 关系/三元组。
+- 事件和时间锚点。
+- 来源/消息 provenance 节点。
+- 合并血统和矛盾/支持边。
+- 用户和知识库范围属性。
 
-Projection rebuild is mandatory. If Elasticsearch or Neo4j data is lost, worker commands must rebuild them from PostgreSQL and stored files where possible.
+投影重建是硬性要求。如果 Elasticsearch 或 Neo4j 数据丢失，worker 命令必须能从 PostgreSQL 和存储文件重建。
 
-All writes to Elasticsearch and Neo4j go through service boundaries or background tasks. Controllers do not perform ad hoc cross-store writes.
+所有写入 Elasticsearch 和 Neo4j 的行为都必须经过服务边界或后台任务。Controller 不允许散落地直接双写多个存储。
 
-## Multi-User And Isolation Model
+## 多用户与隔离模型
 
-Every user-owned table gains `user_id` or joins through a parent that has `user_id`. This includes sources, chunks, ingestion jobs, conversations, messages, citations, memories, memory candidates, graph relations, tags, favorites, shares, model profiles, agent profiles, skills, MCP servers, research reports, notifications, image assets, music records, and emotion records.
+每个用户拥有的数据表都必须拥有 `user_id`，或通过带 `user_id` 的父对象关联。范围包括 sources、chunks、ingestion jobs、conversations、messages、citations、memories、memory candidates、graph relations、tags、favorites、shares、model profiles、agent profiles、skills、MCP servers、research reports、notifications、image assets、music records 和 emotion records。
 
-Every Elasticsearch document includes:
+每个 Elasticsearch 文档必须包含：
 
 - `user_id`
-- `knowledge_base_id` when applicable
+- `knowledge_base_id`，如果适用
 - `document_type`
 - `target_id`
-- visibility flags
+- 可见性标记
 
-Every Neo4j node and relationship includes:
+每个 Neo4j 节点和关系必须包含：
 
 - `user_id`
 - `scope_type`
 - `scope_id`
-- provenance fields where relevant
+- 相关 provenance 字段
 
-API handlers resolve the current user from authenticated context. Repository methods accept user scope explicitly or are constructed with a user scope object. Cross-user reads are rejected at repository or service boundaries, not only in controllers.
+API handler 从认证上下文解析当前用户。Repository 方法要显式接收用户范围，或用用户范围对象构造。跨用户读取必须在 repository 或 service 边界被拒绝，不能只依赖 controller 过滤。
 
-## Authentication And Accounts
+## 认证与账号
 
-The parity target includes:
+对标目标包括：
 
-- email/password login
-- registration switch controlled by settings
-- password hashing
-- JWT access token
-- refresh token or session renewal flow
-- current user endpoint
-- frontend auth store and protected routes
-- logout
-- admin bootstrap user controlled by settings
+- 邮箱/密码登录。
+- 由 settings 控制的注册开关。
+- 密码哈希。
+- JWT access token。
+- Refresh token 或会话续期流程。
+- 当前用户接口。
+- 前端 auth store 和受保护路由。
+- 登出。
+- 由 settings 控制的管理员 bootstrap 用户。
 
-Secrets stored in provider, reranker, model, MCP, notification, and external tool configuration remain encrypted at rest.
+Provider、reranker、模型、MCP、通知和外部工具配置中的 secret 字段继续加密存储。
 
-## Knowledge Base Architecture
+## 知识库架构
 
-Lumen will add explicit multi-knowledge-base support.
+Lumen 将加入显式多知识库支持。
 
-Core objects:
+核心对象：
 
-- `KnowledgeBase`: user-owned workspace for documents, images, and web captures.
-- `Source`: one original source record.
-- `SourceAsset`: stored file or fetched raw artifact.
-- `SourceChunk`: parsed text chunk with embedding status and index status.
-- `IndexingRun`: durable record of embedding, ES indexing, and graph-sync operations.
+- `KnowledgeBase`：用户拥有的文档、图片和网页捕获工作区。
+- `Source`：一个原始资料记录。
+- `SourceAsset`：存储文件或抓取原始 artifact。
+- `SourceChunk`：解析后的文本 chunk，带 embedding 状态和索引状态。
+- `IndexingRun`：embedding、ES 索引和图谱同步的持久记录。
 
-Ingestion supports:
+摄取支持：
 
-- text and markdown
-- PDF with selectable text and OCR fallback
-- DOCX
-- EPUB
-- images with OCR and vision description
-- web links
-- recursive web crawls
-- browser bookmarks
-- future file families through parser registry
+- 文本和 Markdown。
+- PDF，支持 selectable text 提取和 OCR fallback。
+- DOCX。
+- EPUB。
+- 图片 OCR 和 vision 描述。
+- 网页链接。
+- 递归网页抓取。
+- 浏览器书签。
+- 通过 parser registry 扩展未来文件类型。
 
-Knowledge-base workflows:
+知识库工作流：
 
-- create, rename, archive, delete knowledge bases
-- select active knowledge base in chat and search
-- upload or capture into one or more knowledge bases
-- inspect source details, chunks, parse metadata, indexing state, and citations
-- retry failed parse, embedding, and index tasks
-- refresh web sources and crawls
-- share selected conversations, reports, or source summaries
+- 创建、重命名、归档、删除知识库。
+- 在聊天和搜索中选择当前知识库。
+- 上传或捕获资料到一个或多个知识库。
+- 查看资料详情、chunk、解析元数据、索引状态和引用记录。
+- 重试失败的解析、embedding 和索引任务。
+- 刷新网页资料和抓取任务。
+- 分享指定会话、报告或资料摘要。
 
-## Retrieval Architecture
+## 检索架构
 
-Lumen will replace current hash embedding retrieval with a full retrieval pipeline.
+Lumen 将用完整检索管线替换当前 hash embedding 检索。
 
-Pipeline:
+管线：
 
-1. Parse and chunk source content.
-2. Generate real embeddings using configured embedding provider.
-3. Store chunk metadata and embedding status in PostgreSQL.
-4. Index searchable projections in Elasticsearch with:
-   - body text
-   - title
-   - tags
-   - source metadata
-   - user and knowledge-base scope
-   - vector field
-   - timestamps
-   - citation pointers
-5. Query BM25 and vector search in one request or coordinated requests.
-6. Merge and normalize scores.
-7. Apply reranker when configured.
-8. Return citations and match explanations.
+1. 解析和切分资料内容。
+2. 使用配置的 embedding provider 生成真实 embedding。
+3. 在 PostgreSQL 存储 chunk 元数据和 embedding 状态。
+4. 在 Elasticsearch 索引搜索投影，包含：
+   - 正文。
+   - 标题。
+   - 标签。
+   - 资料元数据。
+   - 用户和知识库范围。
+   - 向量字段。
+   - 时间戳。
+   - 引用指针。
+5. 在一次请求或协调请求中查询 BM25 和向量检索。
+6. 合并并归一化分数。
+7. 配置 reranker 时执行 rerank。
+8. 返回引用和匹配解释。
 
-Retrieval modes:
+检索模式：
 
-- knowledge-base search
-- memory search
-- conversation search
-- image search
-- global search
-- agent tool search
+- 知识库搜索。
+- 记忆搜索。
+- 会话搜索。
+- 图片搜索。
+- 全局搜索。
+- Agent 工具搜索。
 
-The evaluation command expands from a small seed into a versioned regression suite that measures retrieval hit rate, citation quality, weak-evidence behavior, and reranker improvements.
+评测命令要从小型 seed 扩展为版本化回归套件，衡量检索命中率、引用质量、弱证据行为和 reranker 改进。
 
-## Memory Architecture
+## 记忆架构
 
-Memory extraction becomes LLM-structured, but confirmation remains explicit.
+记忆抽取升级为 LLM 结构化抽取，但确认机制继续显式存在。
 
-Extraction flow:
+抽取流程：
 
-1. A user message, assistant answer, or source chunk becomes an extraction candidate input.
-2. A worker runs a structured extraction prompt.
-3. The extractor returns candidate facts, preferences, projects, goals, relationships, events, entities, and triples.
-4. Candidates are stored in PostgreSQL with provenance, confidence, raw model output, and source pointers.
-5. The user can confirm, edit, ignore, merge, or forget candidates.
-6. Confirmed memories write graph projections into Neo4j.
+1. 用户消息、助手回答或资料 chunk 进入抽取候选输入。
+2. worker 运行结构化抽取 prompt。
+3. extractor 返回候选事实、偏好、项目、目标、关系、事件、实体和三元组。
+4. 候选写入 PostgreSQL，带 provenance、confidence、原始模型输出和来源指针。
+5. 用户可以确认、编辑、忽略、合并或遗忘候选。
+6. 确认记忆写入 Neo4j 图谱投影。
 
-Neo4j graph model:
+Neo4j 图模型：
 
 - `User`
 - `Memory`
@@ -269,7 +269,7 @@ Neo4j graph model:
 - `KnowledgeBase`
 - `Tag`
 
-Relationship types:
+关系类型：
 
 - `RELATED_TO`
 - `BELONGS_TO`
@@ -284,25 +284,25 @@ Relationship types:
 - `WORKS_ON`
 - `HAS_GOAL`
 
-Every graph write includes provenance. Graph relations are never anonymous.
+每次图写入都必须带 provenance。图关系不能匿名存在。
 
-Memory UX:
+记忆 UX：
 
-- inbox for pending candidates
-- confirmed memory list
-- duplicate and conflict suggestions
-- manual relation editor
-- graph view
-- timeline view
-- provenance path inspector
-- merge lineage
-- forget and restore where policy allows
+- 待确认候选 inbox。
+- 已确认记忆列表。
+- 重复和冲突建议。
+- 手动关系编辑器。
+- 图谱视图。
+- 时间线视图。
+- provenance 路径检查器。
+- 合并血统。
+- 遗忘，以及策略允许时的恢复。
 
-## Agent, Tools, MCP, And Skills
+## Agent、工具、MCP 与 Skills
 
-The target Agent system matches Comet's product class while keeping Lumen auditability.
+目标 Agent 系统要达到 Comet 的产品级别，同时保留 Lumen 的审计性。
 
-Core objects:
+核心对象：
 
 - `AgentProfile`
 - `AgentTool`
@@ -314,222 +314,222 @@ Core objects:
 - `Skill`
 - `SkillVersion`
 
-Capabilities:
+能力：
 
-- ReAct loop and function-calling loop, selected by provider capability.
-- Tool registry for knowledge search, memory search, graph query, web search, source inspection, report creation, notification, and MCP tools.
-- MCP server configuration, health checks, and tool discovery.
-- Skills with prompt templates, instructions, and tool permissions.
-- Tool allowlist per agent profile.
-- Approval policy for write-capable tools.
-- Streaming step updates to the frontend.
-- Durable run logs and replayable traces.
+- 根据 provider 能力选择 ReAct loop 或 function-calling loop。
+- 工具注册表覆盖知识搜索、记忆搜索、图谱查询、网页搜索、资料检查、报告创建、通知和 MCP 工具。
+- MCP server 配置、健康检查和工具发现。
+- Skills 支持 prompt template、说明和工具权限。
+- Agent profile 级工具 allowlist。
+- 写入类工具审批策略。
+- 前端流式展示执行步骤。
+- 持久 run log 和可回放 trace。
 
-Agent answer rules:
+Agent 回答规则：
 
-- Evidence-bearing tasks must cite retrieved sources or graph provenance.
-- Write actions require explicit policy checks and, where configured, approval.
-- Agent failures produce visible error summaries and retry actions.
+- 需要证据的任务必须引用检索资料或图谱 provenance。
+- 写入动作必须通过策略检查；配置要求审批时必须等待审批。
+- Agent 失败必须产生可见错误摘要和重试动作。
 
-## Research Tasks
+## 研究任务
 
-Research is a first-class Agent workflow, not just chat.
+Research 是一等 Agent 工作流，不是聊天附属能力。
 
-Workflow:
+工作流：
 
-1. User creates a research task with topic, scope, knowledge-base selection, and a web-permission flag.
-2. Planner decomposes the task into research questions.
-3. Retriever gathers local and external evidence.
-4. Curator filters and clusters evidence.
-5. Distiller writes structured findings.
-6. Report generator creates a saved report with citations.
-7. User can share the report.
+1. 用户创建研究任务，填写主题、范围、知识库选择和联网权限标记。
+2. Planner 将任务拆解为研究问题。
+3. Retriever 收集本地和外部证据。
+4. Curator 过滤和聚类证据。
+5. Distiller 写出结构化发现。
+6. Report generator 生成带引用的已保存报告。
+7. 用户可以分享报告。
 
-Research artifacts are stored in PostgreSQL, searchable in Elasticsearch, and linked to graph provenance when memory or entity claims are extracted.
+研究 artifact 存在 PostgreSQL，可在 Elasticsearch 中搜索；当提取出记忆或实体声明时，要链接到图谱 provenance。
 
-## Persona And Group Chat
+## Persona 与群聊
 
-Lumen will add:
+Lumen 将加入：
 
-- persona cards
-- persona groups
-- group chat sessions
-- host or moderator role
-- speaker selection
-- persona-specific prompts
-- persona memory access policies
-- group chat sharing and join links
+- persona cards。
+- persona groups。
+- group chat sessions。
+- host 或 moderator 角色。
+- 发言者选择。
+- persona 专属 prompt。
+- persona 记忆访问策略。
+- 群聊分享和加入链接。
 
-Persona chat still uses the same evidence and memory boundaries as single-agent chat. Personas do not gain cross-user access.
+Persona chat 使用与单 Agent chat 相同的证据和记忆边界。Persona 不获得跨用户访问能力。
 
-## Product Surface Parity
+## 产品界面对标
 
-Frontend routes will expand from the current Lumen workbench into a Comet-class app shell.
+前端路由将从当前 Lumen workbench 扩展为 Comet 级 app shell。
 
-Required route families:
+必须覆盖的路由族：
 
-- Home or Dashboard
-- Chat
-- Knowledge Bases
-- Knowledge Detail
-- Image Library
-- Memory
-- Graph
-- Global Search
-- Favorites
-- Model Config
-- Agent Config
-- Agent Tasks
-- Research
-- Personas
-- Group Chat
-- Skills
-- MCP Tools
-- Notifications
-- Music Library
-- Emotion
-- Profile
-- Share pages
-- Status and maintenance
+- Home 或 Dashboard。
+- Chat。
+- Knowledge Bases。
+- Knowledge Detail。
+- Image Library。
+- Memory。
+- Graph。
+- Global Search。
+- Favorites。
+- Model Config。
+- Agent Config。
+- Agent Tasks。
+- Research。
+- Personas。
+- Group Chat。
+- Skills。
+- MCP Tools。
+- Notifications。
+- Music Library。
+- Emotion。
+- Profile。
+- Share pages。
+- Status and maintenance。
 
-The frontend may keep Lumen's current visual style where it improves clarity, but the functional surface must match the Comet module map. Ant Design-level component coverage is acceptable through AntD adoption or equivalent components, but missing controls are not acceptable.
+前端可以保留 Lumen 当前更清晰的视觉风格，但功能面必须覆盖 Comet 模块地图。可以直接采用 Ant Design，也可以用等价组件达到 AntD 级覆盖；缺少必要控件不算对标。
 
-## Dashboard And Status
+## 仪表盘与状态页
 
-Dashboard parity includes:
+Dashboard 对标包括：
 
-- recent knowledge changes
-- recent memory changes
-- pending memory candidates
-- failed jobs
-- retrieval/index health
-- graph sync health
-- storage health for PostgreSQL, Elasticsearch, Neo4j, Redis, and worker
-- agent task status
-- recent conversations
-- favorites and tags
-- suggested next actions
+- 最近知识变更。
+- 最近记忆变更。
+- 待确认记忆候选。
+- 失败任务。
+- 检索/索引健康。
+- 图谱同步健康。
+- PostgreSQL、Elasticsearch、Neo4j、Redis 和 worker 存储/服务健康。
+- Agent task 状态。
+- 最近会话。
+- 收藏和标签。
+- 建议下一步动作。
 
-Status parity includes:
+Status 对标包括：
 
-- job queue
-- worker heartbeat
-- ES index health
-- Neo4j health
-- projection rebuild actions
-- failed parse/index/graph-sync retries
-- maintenance command documentation
+- 任务队列。
+- worker heartbeat。
+- ES index health。
+- Neo4j health。
+- 投影重建动作。
+- 失败 parse/index/graph-sync 重试。
+- 维护命令文档。
 
-## Tags, Favorites, And Sharing
+## 标签、收藏与分享
 
-Tags and favorites become cross-domain primitives:
+标签和收藏升级为跨域基础能力：
 
-- sources
-- chunks or documents
-- memories
-- messages
-- reports
-- images
-- music records where applicable
+- sources。
+- chunks 或 documents。
+- memories。
+- messages。
+- reports。
+- images。
+- music records。
 
-Tag suggestions can be deterministic or LLM-assisted, but confirmation remains visible. Sharing supports public or tokenized read-only access to conversations, reports, or selected knowledge summaries.
+标签建议可以来自确定性规则或 LLM，但确认必须可见。分享支持公开或 tokenized 的只读访问，用于会话、报告或指定知识摘要。
 
-## Notifications
+## 通知
 
-Notification channels are user-owned configurations.
+通知渠道是用户拥有的配置。
 
-Initial channel types:
+初始渠道类型：
 
-- in-app notifications
-- webhook
-- email-compatible provider
+- 站内通知。
+- webhook。
+- email-compatible provider。
 
-Notification events:
+通知事件：
 
-- job failed
-- research task completed
-- scheduled review ready
-- model/provider test failed
-- graph/index rebuild completed
-- agent approval needed
+- 任务失败。
+- 研究任务完成。
+- 定期回顾就绪。
+- 模型/provider 测试失败。
+- 图谱或索引重建完成。
+- Agent 需要审批。
 
-## Music And Emotion Modules
+## 音乐与情绪模块
 
-Music and emotion modules are in scope for parity because Comet exposes them as product modules. They will be implemented after core knowledge, memory, and Agent work so they can reuse user isolation, file storage, model config, tags, favorites, and search.
+音乐和情绪模块纳入对标范围，因为 Comet 将它们作为产品模块暴露。它们在知识、记忆和 Agent 核心能力之后实施，以复用用户隔离、文件存储、模型配置、标签、收藏和搜索。
 
-Music scope:
+音乐范围：
 
-- track metadata
-- lyric storage
-- tags and favorites
-- search
-- frontend library page
+- track metadata。
+- lyric storage。
+- 标签和收藏。
+- 搜索。
+- 前端 library page。
 
-Emotion scope:
+情绪范围：
 
-- mood or emotion records
-- extraction from conversation and manual entry
-- timeline view
-- search and dashboard summaries
+- mood 或 emotion records。
+- 从会话抽取和手动录入。
+- 时间线视图。
+- 搜索和 dashboard 摘要。
 
-## Model And Provider Configuration
+## 模型与 Provider 配置
 
-Model configuration expands beyond current chat provider profiles.
+模型配置从当前聊天 provider profile 扩展为多能力 provider profile。
 
-Provider profiles cover:
+Provider profile 覆盖：
 
-- chat completions
-- embeddings
-- vision
-- rerank
-- speech or audio where needed
-- external search providers
+- chat completions。
+- embeddings。
+- vision。
+- rerank。
+- speech 或 audio 相关能力。
+- 外部搜索 provider。
 
-Every profile includes:
+每个 profile 包含：
 
-- provider type
-- base URL or provider-specific endpoint
-- model
-- encrypted secret fields
-- timeout
-- test status
-- last error
-- user scope
-- active/default flags per capability
+- provider type。
+- base URL 或 provider-specific endpoint。
+- model。
+- 加密 secret 字段。
+- timeout。
+- test status。
+- last error。
+- user scope。
+- 按能力区分的 active/default 标记。
 
-Runtime config resolution chooses capability-specific profiles instead of one global chat profile.
+运行时配置解析要选择能力专属 profile，而不是一个全局 chat profile。
 
-## Background Jobs
+## 后台任务
 
-Celery workers process:
+Celery worker 处理：
 
-- parsing
-- OCR
-- vision description
-- embeddings
-- Elasticsearch indexing
-- Neo4j graph sync
-- memory extraction
-- duplicate and conflict detection
-- research task steps
-- notification dispatch
-- source refresh
-- projection rebuilds
-- cleanup
+- 解析。
+- OCR。
+- vision 描述。
+- embedding。
+- Elasticsearch 索引。
+- Neo4j 图谱同步。
+- 记忆抽取。
+- 重复和冲突检测。
+- 研究任务步骤。
+- 通知发送。
+- 资料刷新。
+- 投影重建。
+- 清理。
 
-Celery beat schedules:
+Celery beat 调度：
 
-- stale job recovery
-- periodic health snapshots
-- source refreshes
-- reminder and review generation
-- retry backoff checks
+- stale job recovery。
+- 周期性健康快照。
+- source refresh。
+- reminder 和 review 生成。
+- retry backoff 检查。
 
-Every long-running workflow writes progress to PostgreSQL and exposes it through APIs.
+所有长流程都要把进度写入 PostgreSQL，并通过 API 暴露。
 
-## API Shape
+## API 形态
 
-API route families:
+API 路由族：
 
 - `/api/auth`
 - `/api/users`
@@ -558,258 +558,258 @@ API route families:
 - `/api/status`
 - `/api/maintenance`
 
-Existing endpoints can remain temporarily, but new parity work should move toward these route families.
+现有 endpoint 可以暂时保留，但新的对标工作要逐步迁移到这些路由族。
 
-## Migration Strategy
+## 迁移策略
 
-Migration happens in phases and keeps the app runnable.
+迁移按阶段推进，并保持应用可运行。
 
-1. Add multi-service compose and health checks.
-2. Add user model and authentication.
-3. Add `user_id` to existing tables and backfill a bootstrap local user.
-4. Add knowledge-base model and assign existing sources to a default knowledge base.
-5. Add Elasticsearch projection services and rebuild command.
-6. Add real embedding provider profiles and migrate chunk indexing to ES.
-7. Add Neo4j projection services and rebuild command.
-8. Add LLM memory extraction and graph sync.
-9. Expand Agent, Skills, MCP, research, persona, and product modules.
+1. 添加多服务 compose 和健康检查。
+2. 添加用户模型和认证。
+3. 给现有表添加 `user_id`，并回填 bootstrap local user。
+4. 添加知识库模型，把现有 sources 分配到默认知识库。
+5. 添加 Elasticsearch 投影服务和重建命令。
+6. 添加真实 embedding provider profile，并迁移 chunk 索引到 ES。
+7. 添加 Neo4j 投影服务和重建命令。
+8. 添加 LLM 记忆抽取和图谱同步。
+9. 扩展 Agent、Skills、MCP、研究、Persona 和产品模块。
 
-Data migration rules:
+数据迁移规则：
 
-- Existing local data is preserved.
-- A bootstrap user owns existing records after auth is introduced.
-- Rebuild commands are idempotent.
-- Projection failures do not corrupt primary PostgreSQL records.
+- 保留现有本地数据。
+- 认证引入后，现有记录归属 bootstrap user。
+- 重建命令必须幂等。
+- 投影失败不能破坏 PostgreSQL 主记录。
 
-## Program Phases
+## 项目阶段
 
-### Phase 0: Parity Audit And Runtime Foundation
+### Phase 0：对标审计与运行底座
 
-Deliverables:
+交付物：
 
-- Comet module parity matrix in repo docs.
-- Docker Compose with PostgreSQL, Redis, Elasticsearch, Neo4j, backend, worker, beat, frontend.
-- Health APIs for all services.
-- Environment and README updates.
-- Tests for service health aggregation.
+- 仓库内 Comet 模块对标矩阵。
+- Docker Compose 包含 PostgreSQL、Redis、Elasticsearch、Neo4j、backend、worker、beat、frontend。
+- 所有服务的健康 API。
+- 环境和 README 更新。
+- 服务健康聚合测试。
 
-Acceptance:
+验收：
 
-- `docker compose up --build` starts the full stack.
-- Status page shows all service health.
-- Existing ingestion and chat smoke flows still work.
+- `docker compose up --build` 启动完整栈。
+- 状态页展示所有服务健康。
+- 现有摄取和聊天 smoke 流程仍可运行。
 
-### Phase 1: Auth, Users, And Data Isolation
+### Phase 1：认证、用户与数据隔离
 
-Deliverables:
+交付物：
 
-- User model, auth APIs, JWT/session flow.
-- Frontend login and protected routes.
-- `user_id` backfill for existing records.
-- Repository-level user scoping.
-- Tests proving cross-user isolation.
+- User model、auth API、JWT/session flow。
+- 前端登录和受保护路由。
+- 现有记录的 `user_id` 回填。
+- Repository 级用户 scoping。
+- 证明跨用户隔离的测试。
 
-Acceptance:
+验收：
 
-- Two users cannot see each other's sources, memories, conversations, jobs, tags, or favorites.
-- Existing local data is assigned to a bootstrap user.
+- 两个用户不能看到彼此的 sources、memories、conversations、jobs、tags 或 favorites。
+- 现有本地数据分配给 bootstrap user。
 
-### Phase 2: Knowledge Bases And Elasticsearch Retrieval
+### Phase 2：知识库与 Elasticsearch 检索
 
-Deliverables:
+交付物：
 
-- Knowledge-base model and UI.
-- ES index templates and projection service.
-- Real embedding provider profile.
-- Hybrid BM25/vector search.
-- Reranker integration in the actual retrieval path.
-- Rebuild and backfill commands.
+- KnowledgeBase model 和 UI。
+- ES index template 和 projection service。
+- 真实 embedding provider profile。
+- BM25/vector 混合检索。
+- reranker 接入真实检索路径。
+- 重建和 backfill 命令。
 
-Acceptance:
+验收：
 
-- Search and chat retrieve through ES.
-- Evaluation suite reports hit metrics.
-- Deleting ES data and running rebuild restores search.
+- 搜索和聊天通过 ES 检索。
+- 评测套件输出命中指标。
+- 删除 ES 数据后运行 rebuild 可以恢复搜索。
 
-### Phase 3: Image And Document Knowledge Parity
+### Phase 3：图片与文档知识对标
 
-Deliverables:
+交付物：
 
-- Image library route.
-- OCR and vision indexing pipeline.
-- Source detail expansion.
-- Multi-knowledge-base ingestion.
-- File asset metadata and retryable parse/index states.
+- Image library route。
+- OCR 和 vision 索引管线。
+- Source detail 扩展。
+- 多知识库摄取。
+- 文件 asset 元数据和可重试 parse/index 状态。
 
-Acceptance:
+验收：
 
-- Images can be uploaded, described, searched, cited, tagged, and favorited.
-- Document and image failures are visible and retryable.
+- 图片可以上传、描述、搜索、引用、打标签和收藏。
+- 文档和图片失败状态可见且可重试。
 
-### Phase 4: Neo4j Memory Graph Parity
+### Phase 4：Neo4j 记忆图谱对标
 
-Deliverables:
+交付物：
 
-- Neo4j connection, schema constraints, and projection layer.
-- Structured LLM memory extraction.
-- Entity, relation, event, provenance, and timeline graph.
-- Graph rebuild command.
-- Graph visualization backed by Neo4j queries.
+- Neo4j 连接、schema constraints 和 projection layer。
+- 结构化 LLM 记忆抽取。
+- 实体、关系、事件、来源和时间线图谱。
+- 图谱重建命令。
+- 基于 Neo4j 查询的图谱可视化。
 
-Acceptance:
+验收：
 
-- Confirmed memories create graph nodes and relationships.
-- Graph and timeline survive rebuild from PostgreSQL records.
-- Provenance path is visible for graph claims.
+- 确认记忆会创建图节点和关系。
+- 图谱和时间线可以从 PostgreSQL 记录重建。
+- 图谱 claim 的 provenance path 可见。
 
-### Phase 5: Agent, MCP, Skills, And Tools
+### Phase 5：Agent、MCP、Skills 与工具
 
-Deliverables:
+交付物：
 
-- Tool registry.
-- MCP server config and discovery.
-- Skill CRUD and prompt templates.
-- Agent ReAct/function-calling loop.
-- Approval policy for write-capable tools.
-- Streaming run steps and durable logs.
+- Tool registry。
+- MCP server 配置和发现。
+- Skill CRUD 和 prompt template。
+- Agent ReAct/function-calling loop。
+- 写入类工具审批策略。
+- 流式执行步骤和持久日志。
 
-Acceptance:
+验收：
 
-- Agent can search knowledge, query memory graph, run allowed MCP tools, and produce cited answers.
-- Tool calls are logged and visible.
-- Write-capable tools require approval when policy demands it.
+- Agent 可以搜索知识、查询记忆图谱、运行授权 MCP 工具，并产生带引用回答。
+- 工具调用记录可见。
+- 策略要求审批时，写入类工具必须等待审批。
 
-### Phase 6: Research And Reports
+### Phase 6：研究与报告
 
-Deliverables:
+交付物：
 
-- Research task model and UI.
-- Planner, retriever, curator, distiller, report generator.
-- Report storage, search, and sharing.
-- Worker-backed progress.
+- Research task model 和 UI。
+- Planner、retriever、curator、distiller、report generator。
+- 报告存储、搜索和分享。
+- worker-backed 进度。
 
-Acceptance:
+验收：
 
-- A research task completes asynchronously and produces a cited report.
-- Report can be searched and shared.
+- 研究任务异步完成并生成带引用报告。
+- 报告可以搜索和分享。
 
-### Phase 7: Persona And Group Chat
+### Phase 7：Persona 与群聊
 
-Deliverables:
+交付物：
 
-- Persona profiles and persona groups.
-- Group chat route.
-- Host orchestration.
-- Speaker prompts and persona memory policies.
-- Join/share flow.
+- Persona profiles 和 persona groups。
+- Group chat route。
+- Host orchestration。
+- Speaker prompts 和 persona memory policies。
+- 加入/分享流程。
 
-Acceptance:
+验收：
 
-- A group chat can run multiple personas with visible message provenance and user-scoped context.
+- 群聊可以运行多个 persona，并显示消息来源和用户范围上下文。
 
-### Phase 8: Comet Product Surface Completion
+### Phase 8：Comet 产品面补齐
 
-Deliverables:
+交付物：
 
-- Dashboard parity.
-- Notifications.
-- Music library.
-- Emotion module.
-- Profile and share pages.
-- Final route and README parity matrix.
+- Dashboard 对标。
+- Notifications。
+- Music library。
+- Emotion module。
+- Profile 和 share pages。
+- 最终路由和 README 对标矩阵。
 
-Acceptance:
+验收：
 
-- Every Comet module family has a Lumen route, API, persisted model, and smoke flow.
-- README no longer describes Lumen as a local prototype.
+- 每个 Comet 模块族都有 Lumen route、API、持久模型和 smoke 流程。
+- README 不再把 Lumen 描述为本地原型。
 
-## Testing Strategy
+## 测试策略
 
-Backend tests:
+后端测试：
 
-- repository user isolation
-- auth flow
-- ingestion jobs
-- ES projection and search service with fake or test ES adapter where appropriate
-- Neo4j projection and graph service with fake or test adapter where appropriate
-- memory extraction parser and confirmation flow
-- agent tool policy
-- research task state machine
-- rebuild commands
+- repository 用户隔离。
+- auth flow。
+- ingestion jobs。
+- ES projection 和 search service；必要时使用 fake 或 test ES adapter。
+- Neo4j projection 和 graph service；必要时使用 fake 或 test adapter。
+- memory extraction parser 和 confirmation flow。
+- agent tool policy。
+- research task state machine。
+- rebuild commands。
 
-Frontend tests:
+前端测试：
 
-- protected routing
-- knowledge-base selection
-- search workflows
-- memory graph workflows
-- agent task panel
-- research task panel
-- user isolation in client state
+- 受保护路由。
+- 知识库选择。
+- 搜索工作流。
+- 记忆图谱工作流。
+- Agent task panel。
+- Research task panel。
+- client state 的用户隔离。
 
-Integration and smoke tests:
+集成和 smoke 测试：
 
-- full compose health
-- upload and index source
-- ask with citations
-- create and confirm memory
-- graph sync
-- ES rebuild
-- Neo4j rebuild
-- agent tool run
-- research report generation
+- full compose health。
+- 上传并索引资料。
+- 带引用提问。
+- 创建并确认记忆。
+- 图谱同步。
+- ES rebuild。
+- Neo4j rebuild。
+- Agent tool run。
+- research report generation。
 
-## Security And Privacy
+## 安全与隐私
 
-- All user data is scoped by authenticated user.
-- Secrets are encrypted at rest.
-- Logs redact common secret shapes.
-- Agent tools receive only the scoped context they are allowed to use.
-- Shared links are read-only and tokenized.
-- Background jobs store user scope and validate ownership before mutating records.
-- Rebuild commands require explicit operator action or admin-scoped API permissions.
+- 所有用户数据都按认证用户隔离。
+- Secret 加密存储。
+- 日志脱敏常见 secret 形态。
+- Agent 工具只接收权限允许的 scoped context。
+- 分享链接是只读 tokenized 访问。
+- 后台任务保存 user scope，并在修改记录前验证所有权。
+- 重建命令需要显式 operator action 或 admin-scoped API 权限。
 
-## Documentation Updates
+## 文档更新
 
-Each phase updates:
+每个阶段都要更新：
 
-- README capability list
-- environment setup
-- Docker Compose service list
-- smoke flow
-- maintenance commands
-- parity matrix status
+- README 能力列表。
+- 环境设置。
+- Docker Compose 服务列表。
+- smoke 流程。
+- 维护命令。
+- 对标矩阵状态。
 
-The README should eventually present Lumen as a full AI knowledge and agent platform, not a local-first prototype.
+README 最终应把 Lumen 描述为完整 AI 知识和 Agent 平台，而不是本地优先原型。
 
-## Phase Plan Decisions
+## 阶段计划必须明确的决策
 
-These are resolved for this program:
+以下决策已在本计划中确定：
 
-- Elasticsearch and Neo4j are required in the target stack.
-- Multi-user authentication is required.
-- Agent, MCP, Skills, research, persona, group chat, music, emotion, notifications, and sharing are in scope.
-- Existing Lumen data must be preserved through migration.
+- Elasticsearch 和 Neo4j 是目标栈必需组件。
+- 多用户认证是必需能力。
+- Agent、MCP、Skills、研究、Persona、群聊、音乐、情绪、通知和分享都在范围内。
+- 迁移必须保留现有 Lumen 数据。
 
-The following implementation choices must be made explicitly in the relevant phase plans:
+以下实现选择必须在对应阶段计划里明确：
 
-- The first production embedding provider.
-- Whether Ant Design is adopted directly or matched through existing components.
-- Exact Neo4j constraint syntax and index names.
-- Exact ES analyzer configuration for the local image.
-- Exact JWT refresh-token storage strategy.
+- 第一版生产 embedding provider。
+- 直接采用 Ant Design，还是用现有组件体系达到等价覆盖。
+- Neo4j constraint 语法和 index 名称。
+- 本地 ES 镜像的 analyzer 配置。
+- JWT refresh-token 存储策略。
 
-## Success Criteria
+## 成功标准
 
-The program is complete when:
+整个计划完成时必须满足：
 
-- Full stack starts with one Docker Compose command.
-- Multiple users can use the app without data leakage.
-- Knowledge retrieval uses real embedding, ES hybrid search, and reranking.
-- Memory extraction is LLM-structured and graph-backed by Neo4j.
-- Agent runs multi-step tool workflows with MCP and Skills support.
-- Research tasks produce cited reports.
-- Persona and group chat workflows are available.
-- Image, search, favorites, tags, shares, dashboard, notifications, music, emotion, model config, profile, and status surfaces exist.
-- Projection rebuilds work for ES and Neo4j.
-- The README parity matrix shows every Comet module family as implemented or intentionally superseded by an equal or stronger Lumen workflow.
+- 一个 Docker Compose 命令启动完整栈。
+- 多用户可同时使用应用且不发生数据泄露。
+- 知识检索使用真实 embedding、ES 混合搜索和 reranking。
+- 记忆抽取是 LLM 结构化抽取，并由 Neo4j 支撑图谱。
+- Agent 能运行 MCP 和 Skills 支持的多步工具工作流。
+- 研究任务能生成带引用报告。
+- Persona 和群聊工作流可用。
+- 图片、搜索、收藏、标签、分享、仪表盘、通知、音乐、情绪、模型配置、Profile 和状态页都存在。
+- ES 和 Neo4j 投影重建可用。
+- README 对标矩阵显示每个 Comet 模块族已经实现，或被 Lumen 等价/更强的工作流明确取代。
