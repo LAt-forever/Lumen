@@ -1,65 +1,65 @@
-# Lumen Comet Parity Phase 0 Runtime Foundation Implementation Plan
+# Lumen 全面对标 Comet Phase 0 运行底座实施计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **给 agentic workers：** 必须使用 `superpowers:subagent-driven-development`（推荐）或 `superpowers:executing-plans` 逐任务执行本计划。步骤使用 checkbox（`- [ ]`）语法跟踪。
 
-**Goal:** Build the Phase 0 foundation for full Comet parity: a documented parity matrix, a complete local runtime stack with PostgreSQL/Redis/Elasticsearch/Neo4j/backend/worker/beat/frontend, and user-visible service health.
+**目标：** 建设全面对标 Comet 的 Phase 0 底座：仓库内对标矩阵、包含 PostgreSQL/Redis/Elasticsearch/Neo4j/backend/worker/beat/frontend 的完整本地运行栈，以及用户可见的平台服务健康状态。
 
-**Architecture:** PostgreSQL remains the transactional source of truth while Elasticsearch and Neo4j are introduced as required platform services but not yet used for retrieval or graph writes. The backend exposes platform health through the existing status API, Docker Compose owns process-level health checks, and the frontend status page renders service health without changing ingestion or chat behavior.
+**架构：** PostgreSQL 继续作为事务型主事实来源；Elasticsearch 和 Neo4j 在本阶段作为必需平台服务接入，但暂不承担检索或图谱写入。后端通过现有 status API 暴露平台健康，Docker Compose 负责进程级健康检查，前端状态页展示服务健康，同时不改变现有摄取和聊天行为。
 
-**Tech Stack:** FastAPI, SQLAlchemy, Celery, Redis, PostgreSQL, Elasticsearch 8, Neo4j 5, React, TanStack Query, Docker Compose, Pytest, Vitest.
+**技术栈：** FastAPI、SQLAlchemy、Celery、Redis、PostgreSQL、Elasticsearch 8、Neo4j 5、React、TanStack Query、Docker Compose、Pytest、Vitest。
 
 ---
 
-## Scope Check
+## 范围检查
 
-This plan implements only Phase 0 from `docs/superpowers/specs/2026-06-22-lumen-comet-parity-program-design.md`.
+本计划只实现 `docs/superpowers/specs/2026-06-22-lumen-comet-parity-program-design.md` 中的 Phase 0。
 
-Included:
+包括：
 
-- Comet parity matrix documentation.
-- Compose services for Elasticsearch, Neo4j, and Celery beat.
-- Backend settings for ES/Neo4j/beat health.
-- Status API service-health payload.
-- Celery beat heartbeat task.
-- Frontend status panel service-health UI.
-- README Phase 0 runtime updates.
-- Tests and verification commands.
+- Comet 对标矩阵文档。
+- Docker Compose 增加 Elasticsearch、Neo4j 和 Celery beat。
+- 后端增加 ES、Neo4j、服务健康、beat heartbeat 设置。
+- Status API 返回 service-health payload。
+- Celery beat heartbeat 任务。
+- 前端状态面板展示 service-health UI。
+- README 增加 Phase 0 运行栈说明。
+- 测试和验证命令。
 
-Excluded from Phase 0:
+不包括：
 
-- Auth and user isolation.
-- ES indexing and retrieval.
-- Neo4j graph projection.
-- Agent/MCP/Skills implementation.
-- Research, persona, group chat, music, emotion, notification workflows.
+- Auth 和用户隔离。
+- ES 索引与检索。
+- Neo4j 图谱投影。
+- Agent/MCP/Skills 实现。
+- Research、persona、group chat、music、emotion、notification 工作流。
 
-## File Structure
+## 文件结构
 
-- Create `docs/comet-parity-matrix.md`: authoritative Comet module parity matrix and Phase 0 status.
-- Modify `docker-compose.yml`: add Elasticsearch, Neo4j, and beat services; wire backend/worker dependencies and env vars.
-- Modify `backend/service/config.py`: add ES, Neo4j, service health, and beat heartbeat settings.
-- Create `backend/service/core/service_health.py`: probe PostgreSQL, Redis, Elasticsearch, Neo4j, Celery worker, and beat heartbeat.
-- Modify `backend/service/core/status.py`: include service health in status summary.
-- Modify `backend/service/schemas.py`: add service health schemas and `services` field on `StatusSummaryRead`.
-- Modify `backend/service/worker.py`: add Celery beat heartbeat schedule and task.
-- Modify `backend/tests/test_status.py`: assert status payload includes service health and preserves existing runtime fields.
-- Create `backend/tests/test_service_health.py`: unit-test service probe success/failure behavior without real ES/Neo4j.
-- Create `backend/tests/test_worker_heartbeat.py`: unit-test heartbeat file writing.
-- Modify `frontend/src/api/types.ts`: add `ServiceHealthRead` and `services` on `StatusSummaryRead`.
-- Modify `frontend/src/components/StatusPanel.tsx`: render service health cards.
-- Modify `frontend/src/styles.css`: add service health status styles using existing status section patterns.
-- Modify `frontend/src/test/workbench.test.tsx`: mock `services` and assert status page renders platform service health.
-- Modify `README.md`: document Phase 0 full stack, services, health checks, and acceptance smoke.
+- 新建 `docs/comet-parity-matrix.md`：权威 Comet 模块对标矩阵和 Phase 0 状态。
+- 修改 `docker-compose.yml`：加入 Elasticsearch、Neo4j、beat 服务，并连接 backend/worker 依赖和环境变量。
+- 修改 `backend/service/config.py`：加入 ES、Neo4j、service health 和 beat heartbeat 设置。
+- 新建 `backend/service/core/service_health.py`：探测 PostgreSQL、Redis、Elasticsearch、Neo4j、Celery worker 和 beat heartbeat。
+- 修改 `backend/service/core/status.py`：在状态摘要中加入服务健康。
+- 修改 `backend/service/schemas.py`：加入服务健康 schema，并在 `StatusSummaryRead` 上加入 `services` 字段。
+- 修改 `backend/service/worker.py`：加入 Celery beat heartbeat schedule 和 task。
+- 修改 `backend/tests/test_status.py`：断言 status payload 包含服务健康，并保留现有 runtime 字段。
+- 新建 `backend/tests/test_service_health.py`：不依赖真实 ES/Neo4j，单测服务探测成功/失败行为。
+- 新建 `backend/tests/test_worker_heartbeat.py`：单测 heartbeat 文件写入。
+- 修改 `frontend/src/api/types.ts`：加入 `ServiceHealthRead`，并在 `StatusSummaryRead` 上加入 `services`。
+- 修改 `frontend/src/components/StatusPanel.tsx`：渲染服务健康卡片。
+- 修改 `frontend/src/styles.css`：复用现有状态区样式，增加服务健康状态样式。
+- 修改 `frontend/src/test/workbench.test.tsx`：mock `services` 并断言状态页渲染平台服务健康。
+- 修改 `README.md`：记录 Phase 0 全栈、服务、健康检查和验收 smoke。
 
-## Task 1: Add Comet Parity Matrix
+## 任务 1：添加 Comet 对标矩阵
 
-**Files:**
+**文件：**
 
-- Create: `docs/comet-parity-matrix.md`
+- 新建：`docs/comet-parity-matrix.md`
 
-- [ ] **Step 1: Write the parity matrix document**
+- [ ] **步骤 1：写入对标矩阵文档**
 
-Create `docs/comet-parity-matrix.md` with this content:
+创建 `docs/comet-parity-matrix.md`，内容如下：
 
 ```markdown
 # Comet 对标矩阵
@@ -106,34 +106,34 @@ Create `docs/comet-parity-matrix.md` with this content:
 - 现有资料摄取和聊天 smoke 流程保持可用。
 ```
 
-- [ ] **Step 2: Verify the matrix names required Phase 0 services**
+- [ ] **步骤 2：确认矩阵写明 Phase 0 必需服务**
 
-Run:
+运行：
 
 ```bash
 rg -n "Elasticsearch|Neo4j|beat|Phase 0 验收" docs/comet-parity-matrix.md
 ```
 
-Expected: four or more matching lines, including the Phase 0 acceptance section.
+期望：输出至少 4 行匹配结果，并包含 Phase 0 验收小节。
 
-- [ ] **Step 3: Commit**
+- [ ] **步骤 3：提交**
 
 ```bash
 git add docs/comet-parity-matrix.md
 git commit -m "docs: add Comet parity matrix"
 ```
 
-## Task 2: Add Backend Health Schemas And Settings
+## 任务 2：添加后端健康 schema 和设置
 
-**Files:**
+**文件：**
 
-- Modify: `backend/service/config.py`
-- Modify: `backend/service/schemas.py`
-- Modify: `backend/tests/test_status.py`
+- 修改：`backend/service/config.py`
+- 修改：`backend/service/schemas.py`
+- 修改：`backend/tests/test_status.py`
 
-- [ ] **Step 1: Write failing status payload test**
+- [ ] **步骤 1：编写失败的 status payload 测试**
 
-Append this test to `backend/tests/test_status.py`:
+把下面测试追加到 `backend/tests/test_status.py`：
 
 ```python
 def test_status_summary_includes_platform_service_health(client, monkeypatch):
@@ -207,20 +207,20 @@ def test_status_summary_includes_platform_service_health(client, monkeypatch):
     assert services["beat"]["detail"] == "heartbeat file not found"
 ```
 
-- [ ] **Step 2: Run the failing backend test**
+- [ ] **步骤 2：运行失败的后端测试**
 
-Run:
+运行：
 
 ```bash
 cd backend
 uv run pytest tests/test_status.py::test_status_summary_includes_platform_service_health -v
 ```
 
-Expected: FAIL because `service.core.service_health` or `ServiceHealthRead` does not exist.
+期望：失败，因为 `service.core.service_health` 或 `ServiceHealthRead` 尚不存在。
 
-- [ ] **Step 3: Add settings fields**
+- [ ] **步骤 3：添加 settings 字段**
 
-In `backend/service/config.py`, add these fields inside `class Settings` after `playwright_enabled`:
+在 `backend/service/config.py` 的 `class Settings` 内、`playwright_enabled` 之后添加：
 
 ```python
     elasticsearch_url: str = "http://127.0.0.1:9200"
@@ -233,15 +233,15 @@ In `backend/service/config.py`, add these fields inside `class Settings` after `
     beat_heartbeat_max_age_seconds: int = 90
 ```
 
-- [ ] **Step 4: Add service health schemas**
+- [ ] **步骤 4：添加 service health schemas**
 
-In `backend/service/schemas.py`, add this literal near the existing literal aliases:
+在 `backend/service/schemas.py` 现有 literal aliases 附近添加：
 
 ```python
 ServiceHealthStatus = Literal["ok", "degraded", "unavailable", "not_configured"]
 ```
 
-Add this model before `StatusActionRead`:
+在 `StatusActionRead` 之前添加：
 
 ```python
 class ServiceHealthRead(BaseModel):
@@ -253,7 +253,7 @@ class ServiceHealthRead(BaseModel):
     checked_at: datetime
 ```
 
-Update `StatusSummaryRead` to include `services`:
+更新 `StatusSummaryRead`，加入 `services`：
 
 ```python
 class StatusSummaryRead(BaseModel):
@@ -267,35 +267,35 @@ class StatusSummaryRead(BaseModel):
     suggested_actions: list[StatusActionRead] = Field(default_factory=list)
 ```
 
-- [ ] **Step 5: Run schema import check**
+- [ ] **步骤 5：运行 schema import 检查**
 
-Run:
+运行：
 
 ```bash
 cd backend
 uv run python -c "from service.config import Settings; from service.schemas import ServiceHealthRead, StatusSummaryRead; print(Settings().elasticsearch_url); print(ServiceHealthRead); print(StatusSummaryRead)"
 ```
 
-Expected: command prints the default Elasticsearch URL and class names without errors.
+期望：命令打印默认 Elasticsearch URL 和类名，不报错。
 
-- [ ] **Step 6: Commit**
+- [ ] **步骤 6：提交**
 
 ```bash
 git add backend/service/config.py backend/service/schemas.py backend/tests/test_status.py
 git commit -m "feat(status): define platform service health schema"
 ```
 
-## Task 3: Implement Service Health Collection
+## 任务 3：实现服务健康收集
 
-**Files:**
+**文件：**
 
-- Create: `backend/service/core/service_health.py`
-- Modify: `backend/service/core/status.py`
-- Create: `backend/tests/test_service_health.py`
+- 新建：`backend/service/core/service_health.py`
+- 修改：`backend/service/core/status.py`
+- 新建：`backend/tests/test_service_health.py`
 
-- [ ] **Step 1: Write service health unit tests**
+- [ ] **步骤 1：编写 service health 单元测试**
 
-Create `backend/tests/test_service_health.py`:
+创建 `backend/tests/test_service_health.py`：
 
 ```python
 from datetime import UTC, datetime, timedelta
@@ -367,20 +367,20 @@ def test_check_beat_heartbeat_reports_stale_file(tmp_path):
     assert "heartbeat stale" in result.detail
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [ ] **步骤 2：运行测试确认失败**
 
-Run:
+运行：
 
 ```bash
 cd backend
 uv run pytest tests/test_service_health.py -v
 ```
 
-Expected: FAIL because `service.core.service_health` does not exist.
+期望：失败，因为 `service.core.service_health` 尚不存在。
 
-- [ ] **Step 3: Create service health module**
+- [ ] **步骤 3：创建 service health 模块**
 
-Create `backend/service/core/service_health.py`:
+创建 `backend/service/core/service_health.py`：
 
 ```python
 from __future__ import annotations
@@ -562,54 +562,54 @@ def collect_service_health(settings: Settings, db_session: Session) -> list[Serv
     ]
 ```
 
-- [ ] **Step 4: Wire status service**
+- [ ] **步骤 4：接入 status service**
 
-In `backend/service/core/status.py`, add this import:
+在 `backend/service/core/status.py` 添加 import：
 
 ```python
 from service.core import service_health
 ```
 
-In `summary()`, before `return StatusSummaryRead(...)`, add:
+在 `summary()` 中、`return StatusSummaryRead(...)` 之前添加：
 
 ```python
         services = service_health.collect_service_health(self.settings, self.sources.db)
 ```
 
-Then include `services=services` in `StatusSummaryRead(...)`:
+然后在 `StatusSummaryRead(...)` 中加入：
 
 ```python
             services=services,
 ```
 
-- [ ] **Step 5: Run backend health tests**
+- [ ] **步骤 5：运行后端健康测试**
 
-Run:
+运行：
 
 ```bash
 cd backend
 uv run pytest tests/test_service_health.py tests/test_status.py::test_status_summary_includes_platform_service_health -v
 ```
 
-Expected: PASS.
+期望：通过。
 
-- [ ] **Step 6: Commit**
+- [ ] **步骤 6：提交**
 
 ```bash
 git add backend/service/core/service_health.py backend/service/core/status.py backend/tests/test_service_health.py
 git commit -m "feat(status): collect platform service health"
 ```
 
-## Task 4: Add Celery Beat Heartbeat
+## 任务 4：添加 Celery Beat heartbeat
 
-**Files:**
+**文件：**
 
-- Modify: `backend/service/worker.py`
-- Create: `backend/tests/test_worker_heartbeat.py`
+- 修改：`backend/service/worker.py`
+- 新建：`backend/tests/test_worker_heartbeat.py`
 
-- [ ] **Step 1: Write heartbeat test**
+- [ ] **步骤 1：编写 heartbeat 测试**
 
-Create `backend/tests/test_worker_heartbeat.py`:
+创建 `backend/tests/test_worker_heartbeat.py`：
 
 ```python
 import json
@@ -630,27 +630,27 @@ def test_record_beat_heartbeat_writes_configured_file(tmp_path, monkeypatch):
     assert "recorded_at" in payload
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [ ] **步骤 2：运行测试确认失败**
 
-Run:
+运行：
 
 ```bash
 cd backend
 uv run pytest tests/test_worker_heartbeat.py -v
 ```
 
-Expected: FAIL because `record_beat_heartbeat` does not exist.
+期望：失败，因为 `record_beat_heartbeat` 尚不存在。
 
-- [ ] **Step 3: Implement beat heartbeat task**
+- [ ] **步骤 3：实现 beat heartbeat task**
 
-In `backend/service/worker.py`, add these imports:
+在 `backend/service/worker.py` 添加 imports：
 
 ```python
 import json
 from datetime import UTC, datetime
 ```
 
-After `celery_app.conf.update(...)`, add:
+在 `celery_app.conf.update(...)` 之后添加：
 
 ```python
 celery_app.conf.beat_schedule = {
@@ -661,7 +661,7 @@ celery_app.conf.beat_schedule = {
 }
 ```
 
-Add this helper and task before `mark_stale_running_jobs_failed()`:
+在 `mark_stale_running_jobs_failed()` 之前添加 helper 和 task：
 
 ```python
 def _beat_heartbeat_path() -> str:
@@ -683,35 +683,35 @@ def record_beat_heartbeat() -> None:
         json.dump(payload, handle, ensure_ascii=False)
 ```
 
-- [ ] **Step 4: Run heartbeat test**
+- [ ] **步骤 4：运行 heartbeat 测试**
 
-Run:
+运行：
 
 ```bash
 cd backend
 uv run pytest tests/test_worker_heartbeat.py -v
 ```
 
-Expected: PASS.
+期望：通过。
 
-- [ ] **Step 5: Commit**
+- [ ] **步骤 5：提交**
 
 ```bash
 git add backend/service/worker.py backend/tests/test_worker_heartbeat.py
 git commit -m "feat(worker): record celery beat heartbeat"
 ```
 
-## Task 5: Expand Docker Compose Runtime
+## 任务 5：扩展 Docker Compose 运行栈
 
-**Files:**
+**文件：**
 
-- Modify: `docker-compose.yml`
-- Modify: `.env.example`
-- Modify: `backend/.env.example`
+- 修改：`docker-compose.yml`
+- 修改：`.env.example`
+- 修改：`backend/.env.example`
 
-- [ ] **Step 1: Update root environment example**
+- [ ] **步骤 1：更新根目录环境示例**
 
-Add these lines to `.env.example`:
+在 `.env.example` 添加：
 
 ```dotenv
 LUMEN_ELASTICSEARCH_URL=http://127.0.0.1:9200
@@ -723,11 +723,11 @@ LUMEN_SERVICE_HEALTH_TIMEOUT_SECONDS=2
 LUMEN_BEAT_HEARTBEAT_MAX_AGE_SECONDS=90
 ```
 
-Add the same lines to `backend/.env.example`.
+把同样内容也添加到 `backend/.env.example`。
 
-- [ ] **Step 2: Add Elasticsearch, Neo4j, and beat to Compose**
+- [ ] **步骤 2：在 Compose 中加入 Elasticsearch、Neo4j 和 beat**
 
-Replace `docker-compose.yml` with a version that preserves existing services and adds the new services:
+用下面版本替换 `docker-compose.yml`，保留现有服务并增加新服务：
 
 ```yaml
 services:
@@ -896,36 +896,36 @@ volumes:
   lumen-data:
 ```
 
-- [ ] **Step 3: Validate Compose config**
+- [ ] **步骤 3：校验 Compose config**
 
-Run:
+运行：
 
 ```bash
 docker compose config >/tmp/lumen-compose-phase0.yml
 rg -n "elasticsearch|neo4j|beat|LUMEN_ELASTICSEARCH_URL|LUMEN_NEO4J_HTTP_URL" /tmp/lumen-compose-phase0.yml
 ```
 
-Expected: output includes the new services and environment variables.
+期望：输出包含新服务和新环境变量。
 
-- [ ] **Step 4: Commit**
+- [ ] **步骤 4：提交**
 
 ```bash
 git add docker-compose.yml .env.example backend/.env.example
 git commit -m "chore(compose): add ES Neo4j and beat services"
 ```
 
-## Task 6: Render Service Health In Frontend Status
+## 任务 6：在前端状态页渲染服务健康
 
-**Files:**
+**文件：**
 
-- Modify: `frontend/src/api/types.ts`
-- Modify: `frontend/src/components/StatusPanel.tsx`
-- Modify: `frontend/src/styles.css`
-- Modify: `frontend/src/test/workbench.test.tsx`
+- 修改：`frontend/src/api/types.ts`
+- 修改：`frontend/src/components/StatusPanel.tsx`
+- 修改：`frontend/src/styles.css`
+- 修改：`frontend/src/test/workbench.test.tsx`
 
-- [ ] **Step 1: Update frontend test fixture**
+- [ ] **步骤 1：更新前端测试 fixture**
 
-In `frontend/src/test/workbench.test.tsx`, find the mocked `/api/status` JSON response and add this `services` array:
+在 `frontend/src/test/workbench.test.tsx` 中找到 mocked `/api/status` JSON response，加入下面的 `services` 数组：
 
 ```ts
 services: [
@@ -980,7 +980,7 @@ services: [
 ],
 ```
 
-In the status page test near the existing `系统状态` assertion, add:
+在状态页测试中、已有 `系统状态` 断言附近加入：
 
 ```ts
 expect(await screen.findByText('平台服务')).toBeInTheDocument()
@@ -989,20 +989,20 @@ expect(screen.getByText('Elasticsearch')).toBeInTheDocument()
 expect(screen.getByText('Celery Beat')).toBeInTheDocument()
 ```
 
-- [ ] **Step 2: Run frontend test to verify it fails**
+- [ ] **步骤 2：运行前端测试确认失败**
 
-Run:
+运行：
 
 ```bash
 cd frontend
 npm run test -- --runInBand src/test/workbench.test.tsx
 ```
 
-Expected: FAIL because `平台服务` is not rendered or TypeScript type does not include `services`.
+期望：失败，因为尚未渲染 `平台服务`，或 TypeScript 类型尚未包含 `services`。
 
-- [ ] **Step 3: Add frontend service health types**
+- [ ] **步骤 3：添加前端 service health 类型**
 
-In `frontend/src/api/types.ts`, add before `StatusSummaryRead`:
+在 `frontend/src/api/types.ts` 中、`StatusSummaryRead` 之前添加：
 
 ```ts
 export type ServiceHealthRead = {
@@ -1015,15 +1015,15 @@ export type ServiceHealthRead = {
 }
 ```
 
-Then add this field to `StatusSummaryRead`:
+然后在 `StatusSummaryRead` 上添加字段：
 
 ```ts
   services: ServiceHealthRead[]
 ```
 
-- [ ] **Step 4: Render service health cards**
+- [ ] **步骤 4：渲染服务健康卡片**
 
-In `frontend/src/components/StatusPanel.tsx`, add these helper functions above `StatusPanel`:
+在 `frontend/src/components/StatusPanel.tsx` 中，把下面 helper functions 加到 `StatusPanel` 上方：
 
 ```tsx
 function serviceStatusLabel(status: string) {
@@ -1040,7 +1040,7 @@ function serviceStatusClass(status: string) {
 }
 ```
 
-Inside the rendered JSX, after the existing `status-grid` block and before `<IngestionProgressPanel mode="full" />`, insert:
+在现有 `status-grid` block 之后、`<IngestionProgressPanel mode="full" />` 之前插入：
 
 ```tsx
       <div className="platform-services">
@@ -1062,9 +1062,9 @@ Inside the rendered JSX, after the existing `status-grid` block and before `<Ing
       </div>
 ```
 
-- [ ] **Step 5: Add CSS**
+- [ ] **步骤 5：添加 CSS**
 
-In `frontend/src/styles.css`, add near the existing `.status-section` rules:
+在 `frontend/src/styles.css` 中、现有 `.status-section` 规则附近添加：
 
 ```css
 .platform-services {
@@ -1129,33 +1129,33 @@ In `frontend/src/styles.css`, add near the existing `.status-section` rules:
 }
 ```
 
-- [ ] **Step 6: Run frontend test**
+- [ ] **步骤 6：运行前端测试**
 
-Run:
+运行：
 
 ```bash
 cd frontend
 npm run test -- src/test/workbench.test.tsx
 ```
 
-Expected: PASS.
+期望：通过。
 
-- [ ] **Step 7: Commit**
+- [ ] **步骤 7：提交**
 
 ```bash
 git add frontend/src/api/types.ts frontend/src/components/StatusPanel.tsx frontend/src/styles.css frontend/src/test/workbench.test.tsx
 git commit -m "feat(status): show platform service health"
 ```
 
-## Task 7: Update README For Phase 0 Runtime
+## 任务 7：更新 README 的 Phase 0 运行栈说明
 
-**Files:**
+**文件：**
 
-- Modify: `README.md`
+- 修改：`README.md`
 
-- [ ] **Step 1: Update service list**
+- [ ] **步骤 1：更新服务列表**
 
-In `README.md`, update the Docker Compose service list to include:
+在 `README.md` 中更新 Docker Compose 服务列表，包含：
 
 ```markdown
 - 前端：http://127.0.0.1:5173/
@@ -1166,11 +1166,11 @@ In `README.md`, update the Docker Compose service list to include:
 - Neo4j Browser：http://127.0.0.1:7474/，默认账号 `neo4j`，密码 `lumen-password`
 ```
 
-- [ ] **Step 2: Add Phase 0 health smoke**
+- [ ] **步骤 2：添加 Phase 0 健康 smoke**
 
-Add this section after the existing health check snippet:
+在现有 health check snippet 后添加：
 
-```markdown
+````markdown
 ### Phase 0 全栈健康检查
 
 全面对标 Comet 后，默认 Compose 栈会启动 PostgreSQL、Redis、Elasticsearch、Neo4j、backend、worker、beat 和 frontend。
@@ -1185,127 +1185,127 @@ curl -s http://127.0.0.1:8000/api/status
 - `docker compose ps` 中 `postgres`、`redis`、`elasticsearch`、`neo4j`、`backend`、`worker`、`beat`、`frontend` 均在运行。
 - `/api/status` 的 `services` 字段包含 `postgres`、`redis`、`elasticsearch`、`neo4j`、`worker`、`beat`。
 - 前端「状态」页展示「平台服务」卡片。
-```
+````
 
-- [ ] **Step 3: Verify README mentions all services**
+- [ ] **步骤 3：确认 README 提到所有服务**
 
-Run:
+运行：
 
 ```bash
 rg -n "Elasticsearch|Neo4j|平台服务|beat" README.md
 ```
 
-Expected: output includes the new Phase 0 health section.
+期望：输出包含新的 Phase 0 健康检查小节。
 
-- [ ] **Step 4: Commit**
+- [ ] **步骤 4：提交**
 
 ```bash
 git add README.md
 git commit -m "docs: document Phase 0 runtime stack"
 ```
 
-## Task 8: Full Verification
+## 任务 8：完整验证
 
-**Files:**
+**文件：**
 
-- No new files.
+- 无新增文件。
 
-- [ ] **Step 1: Run backend focused tests**
+- [ ] **步骤 1：运行后端聚焦测试**
 
-Run:
+运行：
 
 ```bash
 cd backend
 uv run pytest tests/test_service_health.py tests/test_worker_heartbeat.py tests/test_status.py -v
 ```
 
-Expected: PASS.
+期望：通过。
 
-- [ ] **Step 2: Run backend full tests**
+- [ ] **步骤 2：运行完整后端测试**
 
-Run:
+运行：
 
 ```bash
 cd backend
 uv run pytest -v
 ```
 
-Expected: PASS.
+期望：通过。
 
-- [ ] **Step 3: Run frontend tests**
+- [ ] **步骤 3：运行前端测试**
 
-Run:
+运行：
 
 ```bash
 cd frontend
 npm run test
 ```
 
-Expected: PASS.
+期望：通过。
 
-- [ ] **Step 4: Build frontend**
+- [ ] **步骤 4：构建前端**
 
-Run:
+运行：
 
 ```bash
 cd frontend
 npm run build
 ```
 
-Expected: PASS and Vite build output in `frontend/dist`.
+期望：通过，并在 `frontend/dist` 产生 Vite build 输出。
 
-- [ ] **Step 5: Validate Compose config**
+- [ ] **步骤 5：校验 Compose config**
 
-Run:
+运行：
 
 ```bash
 docker compose config >/tmp/lumen-compose-phase0.yml
 rg -n "elasticsearch|neo4j|beat|healthcheck" /tmp/lumen-compose-phase0.yml
 ```
 
-Expected: output includes Elasticsearch, Neo4j, beat, and healthcheck entries.
+期望：输出包含 Elasticsearch、Neo4j、beat 和 healthcheck 配置。
 
-- [ ] **Step 6: Run full Compose smoke when Docker is available**
+- [ ] **步骤 6：Docker 可用时运行完整 Compose smoke**
 
-Run:
+运行：
 
 ```bash
 docker compose up --build
 ```
 
-Expected:
+期望：
 
-- PostgreSQL becomes healthy.
-- Redis becomes healthy.
-- Elasticsearch becomes healthy.
-- Neo4j becomes healthy.
-- Backend becomes healthy.
-- Worker starts.
-- Beat starts and creates the heartbeat file through the scheduled task.
-- Frontend starts at `http://127.0.0.1:5173/`.
+- PostgreSQL healthy。
+- Redis healthy。
+- Elasticsearch healthy。
+- Neo4j healthy。
+- Backend healthy。
+- Worker 启动。
+- Beat 启动，并通过 scheduled task 创建 heartbeat 文件。
+- Frontend 在 `http://127.0.0.1:5173/` 启动。
 
-In another terminal:
+在另一个 terminal 运行：
 
 ```bash
 curl -s http://127.0.0.1:8000/api/status
 ```
 
-Expected: response contains `services` with `postgres`, `redis`, `elasticsearch`, `neo4j`, `worker`, and `beat`.
+期望：response 的 `services` 包含 `postgres`、`redis`、`elasticsearch`、`neo4j`、`worker` 和 `beat`。
 
-- [ ] **Step 7: Final status check**
+- [ ] **步骤 7：最终状态检查**
 
-Run:
+运行：
 
 ```bash
 git status --short
 ```
 
-Expected: clean working tree except for user-owned unrelated files such as `.claude/` if they were already present.
+期望：工作树干净；如果 `.claude/` 这类用户原有无关文件已经存在，可以继续保留为未跟踪状态。
 
-## Self-Review Checklist
+## 自审清单
 
-- Spec coverage: implements Phase 0 parity audit, runtime stack, service health, status UI, and docs.
+- Spec 覆盖：实现 Phase 0 对标审计、运行栈、服务健康、状态页 UI 和文档。
 - 文本完整性：计划正文没有未定项、临时标记或让执行者自行补全的步骤。
-- Type consistency: backend `ServiceHealthRead` fields match frontend `ServiceHealthRead`.
-- Scope control: no auth, ES retrieval, Neo4j graph writes, Agent, research, persona, music, emotion, or notification feature work in Phase 0.
-- Verification: backend tests, frontend tests, frontend build, compose config, and optional full Compose smoke are included.
+- 类型一致性：后端 `ServiceHealthRead` 字段与前端 `ServiceHealthRead` 一致。
+- 范围控制：Phase 0 不做 auth、ES 检索、Neo4j 图写入、Agent、research、persona、music、emotion 或 notification feature work。
+- 验证：包含后端测试、前端测试、前端 build、compose config，以及 Docker 可用时的完整 Compose smoke。
