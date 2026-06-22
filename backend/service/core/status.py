@@ -1,4 +1,5 @@
 from service.config import Settings
+from service.core import service_health
 from service.core.llm import resolve_runtime_llm_config
 from service.core.tagging import TagSuggestionService
 from service.repositories.conversations import ConversationRepository
@@ -50,10 +51,12 @@ class StatusService:
             for source in self.sources.failed_sources()
         ]
         pending_count = self.organization.pending_suggestion_count()
+        services = service_health.collect_service_health(self.settings, self.sources.db)
         return StatusSummaryRead(
             runtime=runtime,
             source_counts=counts,
             ingestion_jobs=self.ingestion_jobs.status_counts(),
+            services=services,
             failed_sources=failed_sources,
             pending_tag_suggestion_count=pending_count,
             latest_fallback_reason=runtime.latest_fallback_reason,
