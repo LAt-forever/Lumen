@@ -1,4 +1,9 @@
-def test_status_summary_reports_runtime_sources_and_pending_tag_suggestions(client):
+def _disable_platform_service_health(monkeypatch):
+    monkeypatch.setattr("service.core.service_health.collect_service_health", lambda settings, db_session: [])
+
+
+def test_status_summary_reports_runtime_sources_and_pending_tag_suggestions(client, monkeypatch):
+    _disable_platform_service_health(monkeypatch)
     source = client.post(
         "/api/sources",
         json={
@@ -57,7 +62,8 @@ def test_source_retry_reindexes_failed_source_without_deleting_history(client, m
     assert search.json()[0]["source_id"] == failed["id"]
 
 
-def test_status_runtime_payload_does_not_leak_api_keys(client):
+def test_status_runtime_payload_does_not_leak_api_keys(client, monkeypatch):
+    _disable_platform_service_health(monkeypatch)
     client.post(
         "/api/settings/provider-profiles",
         json={
@@ -81,6 +87,8 @@ def test_status_runtime_payload_does_not_leak_api_keys(client):
 
 
 def test_status_summary_reports_ingestion_job_counts(client, monkeypatch):
+    _disable_platform_service_health(monkeypatch)
+
     class FakeAsyncResult:
         id = "task-status"
 

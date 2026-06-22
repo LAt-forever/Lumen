@@ -6,6 +6,8 @@ from service.config import Settings
 from service.core.service_health import (
     check_beat_heartbeat,
     check_postgres,
+    check_redis,
+    check_worker,
     service_result,
 )
 
@@ -39,6 +41,158 @@ def test_check_postgres_reports_ok(client):
     assert "SELECT 1" in result.detail
 
 
+def test_check_redis_sets_connect_timeout_and_closes_client(monkeypatch):
+    calls = {}
+
+    class FakeRedis:
+        def ping(self):
+            calls["pinged"] = True
+
+        def close(self):
+            calls["closed"] = True
+
+    def fake_from_url(url, socket_timeout=None, socket_connect_timeout=None):
+        calls["url"] = url
+        calls["socket_timeout"] = socket_timeout
+        calls["socket_connect_timeout"] = socket_connect_timeout
+        return FakeRedis()
+
+    monkeypatch.setattr("service.core.service_health.Redis.from_url", fake_from_url)
+    settings = Settings(celery_broker_url="redis://health-check", service_health_timeout_seconds=0.25)
+
+    result = check_redis(settings)
+
+    assert result.name == "redis"
+    assert result.status == "ok"
+    assert calls == {
+        "url": "redis://health-check",
+        "socket_timeout": 0.25,
+        "socket_connect_timeout": 0.25,
+        "pinged": True,
+        "closed": True,
+    }
+
+
+def test_check_worker_reports_broker_unavailable_without_celery_inspect(monkeypatch):
+    calls = {}
+
+    class FakeRedis:
+        def ping(self):
+            raise TimeoutError("redis down")
+
+        def close(self):
+            calls["closed"] = True
+
+    def fake_from_url(url, socket_timeout=None, socket_connect_timeout=None):
+        calls["url"] = url
+        calls["socket_timeout"] = socket_timeout
+        calls["socket_connect_timeout"] = socket_connect_timeout
+        return FakeRedis()
+
+    class FakeCelery:
+        def __init__(self, *args, **kwargs):
+            raise AssertionError("Celery inspect should not run when broker is unavailable")
+
+    monkeypatch.setattr("service.core.service_health.Redis.from_url", fake_from_url)
+    monkeypatch.setattr("service.core.service_health.Celery", FakeCelery)
+    settings = Settings(celery_broker_url="redis://health-check", service_health_timeout_seconds=0.25)
+
+    result = check_worker(settings)
+
+    assert result.name == "worker"
+    assert result.label == "Celery Worker"
+    assert result.status == "unavailable"
+    assert result.detail.startswith("broker unavailable: redis down")
+    assert calls == {
+        "url": "redis://health-check",
+        "socket_timeout": 0.25,
+        "socket_connect_timeout": 0.25,
+        "closed": True,
+    }
+
+
+def test_check_worker_preserves_no_worker_replied_detail(monkeypatch):
+    calls = {}
+
+    class FakeRedis:
+        def ping(self):
+            calls["broker_pinged"] = True
+
+        def close(self):
+            calls["broker_closed"] = True
+
+    def fake_from_url(url, socket_timeout=None, socket_connect_timeout=None):
+        calls["socket_timeout"] = socket_timeout
+        calls["socket_connect_timeout"] = socket_connect_timeout
+        return FakeRedis()
+
+    class FakeInspect:
+        def ping(self):
+            return {}
+
+    class FakeControl:
+        def inspect(self, timeout=None):
+            calls["inspect_timeout"] = timeout
+            return FakeInspect()
+
+    class FakeCelery:
+        def __init__(self, name, broker=None, backend=None):
+            calls["celery_name"] = name
+            calls["celery_broker"] = broker
+            calls["celery_backend"] = backend
+            self.conf = self
+            self.control = FakeControl()
+
+        def update(self, **kwargs):
+            calls["celery_conf"] = kwargs
+
+        def close(self):
+            calls["celery_closed"] = True
+
+    monkeypatch.setattr("service.core.service_health.Redis.from_url", fake_from_url)
+    monkeypatch.setattr("service.core.service_health.Celery", FakeCelery)
+    settings = Settings(
+        celery_broker_url="redis://health-check",
+        celery_result_backend="redis://health-results",
+        service_health_timeout_seconds=0.25,
+    )
+
+    result = check_worker(settings)
+
+    assert result.name == "worker"
+    assert result.status == "unavailable"
+    assert result.detail == "no worker replied"
+    assert calls == {
+        "socket_timeout": 0.25,
+        "socket_connect_timeout": 0.25,
+        "broker_pinged": True,
+        "broker_closed": True,
+        "celery_name": "lumen-health",
+        "celery_broker": "redis://health-check",
+        "celery_backend": "redis://health-results",
+        "celery_conf": {
+            "broker_connection_timeout": 0.25,
+            "broker_connection_retry": False,
+            "broker_connection_retry_on_startup": False,
+            "broker_connection_max_retries": 0,
+            "broker_transport_options": {
+                "socket_timeout": 0.25,
+                "socket_connect_timeout": 0.25,
+                "retry_on_timeout": False,
+                "max_retries": 0,
+            },
+            "result_backend_transport_options": {
+                "socket_timeout": 0.25,
+                "socket_connect_timeout": 0.25,
+                "retry_on_timeout": False,
+                "max_retries": 0,
+            },
+        },
+        "inspect_timeout": 0.25,
+        "celery_closed": True,
+    }
+
+
 def test_check_beat_heartbeat_reports_missing_file(tmp_path):
     settings = Settings(beat_heartbeat_path=tmp_path / "missing.json")
 
@@ -47,6 +201,23 @@ def test_check_beat_heartbeat_reports_missing_file(tmp_path):
     assert result.name == "beat"
     assert result.status == "unavailable"
     assert result.detail == "heartbeat file not found"
+
+
+def test_check_beat_heartbeat_reports_stat_error(monkeypatch):
+    class BrokenStatPath:
+        def exists(self):
+            return True
+
+        def stat(self):
+            raise OSError("permission denied")
+
+    monkeypatch.setattr("service.core.service_health._heartbeat_path", lambda settings: BrokenStatPath())
+
+    result = check_beat_heartbeat(Settings())
+
+    assert result.name == "beat"
+    assert result.status == "unavailable"
+    assert result.detail == "heartbeat stat failed: permission denied"
 
 
 def test_check_beat_heartbeat_reports_stale_file(tmp_path):

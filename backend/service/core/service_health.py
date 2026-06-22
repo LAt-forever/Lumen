@@ -50,6 +50,18 @@ def unavailable(name: str, label: str, detail: str, started_at: float) -> Servic
     )
 
 
+def _ping_redis(url: str, timeout_seconds: float) -> None:
+    client = Redis.from_url(
+        url,
+        socket_timeout=timeout_seconds,
+        socket_connect_timeout=timeout_seconds,
+    )
+    try:
+        client.ping()
+    finally:
+        client.close()
+
+
 def check_postgres(db: Session) -> ServiceHealthRead:
     started_at = perf_counter()
     try:
@@ -69,7 +81,7 @@ def check_postgres(db: Session) -> ServiceHealthRead:
 def check_redis(settings: Settings) -> ServiceHealthRead:
     started_at = perf_counter()
     try:
-        Redis.from_url(settings.celery_broker_url, socket_timeout=settings.service_health_timeout_seconds).ping()
+        _ping_redis(settings.celery_broker_url, settings.service_health_timeout_seconds)
     except Exception as exc:
         return unavailable("redis", "Redis", str(exc), started_at)
     return service_result(
@@ -102,11 +114,41 @@ def check_http_json(name: str, label: str, url: str, timeout_seconds: float) -> 
 
 def check_worker(settings: Settings) -> ServiceHealthRead:
     started_at = perf_counter()
+    timeout = settings.service_health_timeout_seconds
+    try:
+        _ping_redis(settings.celery_broker_url, timeout)
+    except Exception as exc:
+        return unavailable("worker", "Celery Worker", f"broker unavailable: {exc}", started_at)
+
+    app = None
     try:
         app = Celery("lumen-health", broker=settings.celery_broker_url, backend=settings.celery_result_backend)
-        replies = app.control.inspect(timeout=settings.service_health_timeout_seconds).ping() or {}
+        app.conf.update(
+            broker_connection_timeout=timeout,
+            broker_connection_retry=False,
+            broker_connection_retry_on_startup=False,
+            broker_connection_max_retries=0,
+            broker_transport_options={
+                "socket_timeout": timeout,
+                "socket_connect_timeout": timeout,
+                "retry_on_timeout": False,
+                "max_retries": 0,
+            },
+            result_backend_transport_options={
+                "socket_timeout": timeout,
+                "socket_connect_timeout": timeout,
+                "retry_on_timeout": False,
+                "max_retries": 0,
+            },
+        )
+        inspector = app.control.inspect(timeout=timeout)
+        replies = inspector.ping() if inspector is not None else {}
+        replies = replies or {}
     except Exception as exc:
         return unavailable("worker", "Celery Worker", str(exc), started_at)
+    finally:
+        if app is not None:
+            app.close()
     if not replies:
         return service_result(
             name="worker",
@@ -144,7 +186,18 @@ def check_beat_heartbeat(settings: Settings) -> ServiceHealthRead:
             status="unavailable",
             detail="heartbeat file not found",
         )
-    age_seconds = datetime.now(UTC).timestamp() - path.stat().st_mtime
+    try:
+        mtime = path.stat().st_mtime
+    except OSError as exc:
+        return service_result(
+            name="beat",
+            label="Celery Beat",
+            started_at=started_at,
+            finished_at=perf_counter(),
+            status="unavailable",
+            detail=f"heartbeat stat failed: {exc}",
+        )
+    age_seconds = datetime.now(UTC).timestamp() - mtime
     if age_seconds > settings.beat_heartbeat_max_age_seconds:
         return service_result(
             name="beat",
