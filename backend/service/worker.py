@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+from datetime import UTC, datetime
 
 from celery import Celery
 from celery.signals import worker_ready
@@ -27,6 +29,31 @@ celery_app.conf.update(
     worker_prefetch_multiplier=1,
     task_acks_late=False,
 )
+celery_app.conf.beat_schedule = {
+    "lumen-beat-heartbeat": {
+        "task": "service.worker.record_beat_heartbeat",
+        "schedule": 30.0,
+    }
+}
+
+
+def _beat_heartbeat_path() -> str:
+    current_settings = Settings()
+    path = current_settings.beat_heartbeat_path or (current_settings.data_dir / "beat-heartbeat.json")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return str(path)
+
+
+@celery_app.task(name="service.worker.record_beat_heartbeat")
+def record_beat_heartbeat() -> None:
+    path = _beat_heartbeat_path()
+    payload = {
+        "ok": True,
+        "service": "celery-beat",
+        "recorded_at": datetime.now(UTC).isoformat(),
+    }
+    with open(path, "w", encoding="utf-8") as handle:
+        json.dump(payload, handle, ensure_ascii=False)
 
 
 def mark_stale_running_jobs_failed() -> None:
