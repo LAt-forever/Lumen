@@ -8,8 +8,29 @@ from service.core.service_health import (
     check_postgres,
     check_redis,
     check_worker,
+    collect_service_health,
     service_result,
 )
+from service.schemas import ServiceHealthRead
+
+
+def _health(name: str, status: str = "ok", detail: str | None = None) -> ServiceHealthRead:
+    labels = {
+        "postgres": "PostgreSQL",
+        "redis": "Redis",
+        "elasticsearch": "Elasticsearch",
+        "neo4j": "Neo4j",
+        "worker": "Celery Worker",
+        "beat": "Celery Beat",
+    }
+    return ServiceHealthRead(
+        name=name,
+        label=labels[name],
+        status=status,
+        detail=detail or f"{name} ok",
+        latency_ms=1.0,
+        checked_at=datetime(2026, 6, 22, tzinfo=UTC),
+    )
 
 
 def test_service_result_records_ok_latency():
@@ -191,6 +212,61 @@ def test_check_worker_preserves_no_worker_replied_detail(monkeypatch):
         "inspect_timeout": 0.25,
         "celery_closed": True,
     }
+
+
+def test_collect_service_health_skips_worker_when_redis_unavailable(monkeypatch):
+    calls = []
+
+    def fake_http(name, label, url, timeout_seconds):
+        calls.append(("http", name, url, timeout_seconds))
+        return _health(name)
+
+    def fail_worker(settings, check_broker=True):
+        raise AssertionError("worker check should be skipped when redis is unavailable")
+
+    monkeypatch.setattr("service.core.service_health.check_postgres", lambda db: _health("postgres"))
+    monkeypatch.setattr(
+        "service.core.service_health.check_redis",
+        lambda settings: _health("redis", "unavailable", "redis connection refused"),
+    )
+    monkeypatch.setattr("service.core.service_health.check_http_json", fake_http)
+    monkeypatch.setattr("service.core.service_health.check_worker", fail_worker)
+    monkeypatch.setattr("service.core.service_health.check_beat_heartbeat", lambda settings: _health("beat"))
+
+    results = collect_service_health(Settings(), db_session=object())
+
+    assert [result.name for result in results] == ["postgres", "redis", "elasticsearch", "neo4j", "worker", "beat"]
+    worker = results[4]
+    assert worker.status == "unavailable"
+    assert worker.detail == "broker unavailable: redis connection refused"
+    assert {call[1] for call in calls} == {"elasticsearch", "neo4j"}
+
+
+def test_collect_service_health_reuses_ok_redis_and_skips_worker_broker_check(monkeypatch):
+    calls = []
+
+    def fake_http(name, label, url, timeout_seconds):
+        calls.append(("http", name, url, timeout_seconds))
+        return _health(name)
+
+    def fake_worker(settings, check_broker=True):
+        calls.append(("worker", check_broker))
+        assert check_broker is False
+        return _health("worker", "unavailable", "no worker replied")
+
+    settings = Settings(elasticsearch_url="http://search.example/")
+    monkeypatch.setattr("service.core.service_health.check_postgres", lambda db: _health("postgres"))
+    monkeypatch.setattr("service.core.service_health.check_redis", lambda settings: _health("redis"))
+    monkeypatch.setattr("service.core.service_health.check_http_json", fake_http)
+    monkeypatch.setattr("service.core.service_health.check_worker", fake_worker)
+    monkeypatch.setattr("service.core.service_health.check_beat_heartbeat", lambda settings: _health("beat"))
+
+    results = collect_service_health(settings, db_session=object())
+
+    assert [result.name for result in results] == ["postgres", "redis", "elasticsearch", "neo4j", "worker", "beat"]
+    assert ("http", "elasticsearch", "http://search.example/_cluster/health", settings.service_health_timeout_seconds) in calls
+    assert ("http", "neo4j", settings.neo4j_http_url, settings.service_health_timeout_seconds) in calls
+    assert ("worker", False) in calls
 
 
 def test_check_beat_heartbeat_reports_missing_file(tmp_path):

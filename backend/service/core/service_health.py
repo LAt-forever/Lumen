@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
 from time import perf_counter
@@ -112,13 +113,14 @@ def check_http_json(name: str, label: str, url: str, timeout_seconds: float) -> 
     )
 
 
-def check_worker(settings: Settings) -> ServiceHealthRead:
+def check_worker(settings: Settings, check_broker: bool = True) -> ServiceHealthRead:
     started_at = perf_counter()
     timeout = settings.service_health_timeout_seconds
-    try:
-        _ping_redis(settings.celery_broker_url, timeout)
-    except Exception as exc:
-        return unavailable("worker", "Celery Worker", f"broker unavailable: {exc}", started_at)
+    if check_broker:
+        try:
+            _ping_redis(settings.celery_broker_url, timeout)
+        except Exception as exc:
+            return unavailable("worker", "Celery Worker", f"broker unavailable: {exc}", started_at)
 
     app = None
     try:
@@ -165,6 +167,18 @@ def check_worker(settings: Settings) -> ServiceHealthRead:
         finished_at=perf_counter(),
         status="ok",
         detail=f"{len(replies)} worker(s) replied",
+    )
+
+
+def _worker_unavailable_for_broker(redis_result: ServiceHealthRead) -> ServiceHealthRead:
+    started_at = perf_counter()
+    return service_result(
+        name="worker",
+        label="Celery Worker",
+        started_at=started_at,
+        finished_at=perf_counter(),
+        status="unavailable",
+        detail=f"broker unavailable: {redis_result.detail}",
     )
 
 
@@ -219,11 +233,41 @@ def check_beat_heartbeat(settings: Settings) -> ServiceHealthRead:
 
 def collect_service_health(settings: Settings, db_session: Session) -> list[ServiceHealthRead]:
     elasticsearch_url = settings.elasticsearch_url.rstrip("/") + "/_cluster/health"
+    postgres = check_postgres(db_session)
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        redis_future = executor.submit(check_redis, settings)
+        elasticsearch_future = executor.submit(
+            check_http_json,
+            "elasticsearch",
+            "Elasticsearch",
+            elasticsearch_url,
+            settings.service_health_timeout_seconds,
+        )
+        neo4j_future = executor.submit(
+            check_http_json,
+            "neo4j",
+            "Neo4j",
+            settings.neo4j_http_url,
+            settings.service_health_timeout_seconds,
+        )
+        beat_future = executor.submit(check_beat_heartbeat, settings)
+
+        redis = redis_future.result()
+        if redis.status == "ok":
+            worker_future = executor.submit(check_worker, settings, check_broker=False)
+            worker = worker_future.result()
+        else:
+            worker = _worker_unavailable_for_broker(redis)
+
+        elasticsearch = elasticsearch_future.result()
+        neo4j = neo4j_future.result()
+        beat = beat_future.result()
+
     return [
-        check_postgres(db_session),
-        check_redis(settings),
-        check_http_json("elasticsearch", "Elasticsearch", elasticsearch_url, settings.service_health_timeout_seconds),
-        check_http_json("neo4j", "Neo4j", settings.neo4j_http_url, settings.service_health_timeout_seconds),
-        check_worker(settings),
-        check_beat_heartbeat(settings),
+        postgres,
+        redis,
+        elasticsearch,
+        neo4j,
+        worker,
+        beat,
     ]
