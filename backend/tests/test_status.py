@@ -1,4 +1,9 @@
-def test_status_summary_reports_runtime_sources_and_pending_tag_suggestions(client):
+def _disable_platform_service_health(monkeypatch):
+    monkeypatch.setattr("service.core.service_health.collect_service_health", lambda settings, db_session: [])
+
+
+def test_status_summary_reports_runtime_sources_and_pending_tag_suggestions(client, monkeypatch):
+    _disable_platform_service_health(monkeypatch)
     source = client.post(
         "/api/sources",
         json={
@@ -57,7 +62,8 @@ def test_source_retry_reindexes_failed_source_without_deleting_history(client, m
     assert search.json()[0]["source_id"] == failed["id"]
 
 
-def test_status_runtime_payload_does_not_leak_api_keys(client):
+def test_status_runtime_payload_does_not_leak_api_keys(client, monkeypatch):
+    _disable_platform_service_health(monkeypatch)
     client.post(
         "/api/settings/provider-profiles",
         json={
@@ -81,6 +87,8 @@ def test_status_runtime_payload_does_not_leak_api_keys(client):
 
 
 def test_status_summary_reports_ingestion_job_counts(client, monkeypatch):
+    _disable_platform_service_health(monkeypatch)
+
     class FakeAsyncResult:
         id = "task-status"
 
@@ -94,3 +102,74 @@ def test_status_summary_reports_ingestion_job_counts(client, monkeypatch):
 
     assert response.status_code == 200
     assert response.json()["ingestion_jobs"]["queued"] == 1
+
+
+def test_status_summary_includes_platform_service_health(client, monkeypatch):
+    from datetime import UTC, datetime
+
+    from service.schemas import ServiceHealthRead
+
+    def fake_collect_service_health(settings, db_session):
+        return [
+            ServiceHealthRead(
+                name="postgres",
+                label="PostgreSQL",
+                status="ok",
+                detail="SELECT 1 succeeded",
+                latency_ms=1.2,
+                checked_at=datetime(2026, 6, 22, tzinfo=UTC),
+            ),
+            ServiceHealthRead(
+                name="redis",
+                label="Redis",
+                status="ok",
+                detail="PING succeeded",
+                latency_ms=2.3,
+                checked_at=datetime(2026, 6, 22, tzinfo=UTC),
+            ),
+            ServiceHealthRead(
+                name="elasticsearch",
+                label="Elasticsearch",
+                status="unavailable",
+                detail="connection refused",
+                latency_ms=None,
+                checked_at=datetime(2026, 6, 22, tzinfo=UTC),
+            ),
+            ServiceHealthRead(
+                name="neo4j",
+                label="Neo4j",
+                status="unavailable",
+                detail="connection refused",
+                latency_ms=None,
+                checked_at=datetime(2026, 6, 22, tzinfo=UTC),
+            ),
+            ServiceHealthRead(
+                name="worker",
+                label="Celery Worker",
+                status="unavailable",
+                detail="no worker replied",
+                latency_ms=None,
+                checked_at=datetime(2026, 6, 22, tzinfo=UTC),
+            ),
+            ServiceHealthRead(
+                name="beat",
+                label="Celery Beat",
+                status="unavailable",
+                detail="heartbeat file not found",
+                latency_ms=None,
+                checked_at=datetime(2026, 6, 22, tzinfo=UTC),
+            ),
+        ]
+
+    monkeypatch.setattr("service.core.service_health.collect_service_health", fake_collect_service_health)
+
+    response = client.get("/api/status")
+
+    assert response.status_code == 200
+    services = {item["name"]: item for item in response.json()["services"]}
+    assert services["postgres"]["status"] == "ok"
+    assert services["redis"]["label"] == "Redis"
+    assert services["elasticsearch"]["status"] == "unavailable"
+    assert services["neo4j"]["status"] == "unavailable"
+    assert services["worker"]["detail"] == "no worker replied"
+    assert services["beat"]["detail"] == "heartbeat file not found"

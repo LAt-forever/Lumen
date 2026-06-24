@@ -21,6 +21,7 @@ GlobalSearchResultType = Literal["source_chunk", "source", "memory", "message"]
 IngestionJobStatus = Literal["queued", "running", "succeeded", "failed", "canceled"]
 IngestionJobType = Literal["note", "upload", "link", "crawl", "bookmark", "index", "retry"]
 AgentToolName = Literal["global_search", "memory_search", "memory_graph"]
+ServiceHealthStatus = Literal["ok", "degraded", "unavailable", "not_configured"]
 
 
 class SourceCreate(BaseModel):
@@ -298,6 +299,15 @@ class FailedSourceRead(BaseModel):
     created_at: datetime
 
 
+class ServiceHealthRead(BaseModel):
+    name: str
+    label: str
+    status: ServiceHealthStatus
+    detail: str
+    latency_ms: float | None = None
+    checked_at: datetime
+
+
 class StatusActionRead(BaseModel):
     label: str
     target_view: str
@@ -308,6 +318,7 @@ class StatusSummaryRead(BaseModel):
     runtime: RuntimeSettingsRead
     source_counts: SourceCountsRead
     ingestion_jobs: IngestionJobCountsRead = Field(default_factory=IngestionJobCountsRead)
+    services: list[ServiceHealthRead] = Field(default_factory=list)
     failed_sources: list[FailedSourceRead] = Field(default_factory=list)
     pending_tag_suggestion_count: int
     latest_fallback_reason: str | None = None

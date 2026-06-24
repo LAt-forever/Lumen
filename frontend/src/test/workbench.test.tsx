@@ -595,6 +595,56 @@ describe('Lumen workbench', () => {
               active_profile_id: null,
               active_profile_name: null,
             },
+            services: [
+              {
+                name: 'postgres',
+                label: 'PostgreSQL',
+                status: 'ok',
+                detail: 'SELECT 1 succeeded',
+                latency_ms: 1.2,
+                checked_at: '2026-06-22T00:00:00Z',
+              },
+              {
+                name: 'redis',
+                label: 'Redis',
+                status: 'ok',
+                detail: 'PING succeeded',
+                latency_ms: 2.3,
+                checked_at: '2026-06-22T00:00:00Z',
+              },
+              {
+                name: 'elasticsearch',
+                label: 'Elasticsearch',
+                status: 'unavailable',
+                detail: 'connection refused',
+                latency_ms: null,
+                checked_at: '2026-06-22T00:00:00Z',
+              },
+              {
+                name: 'neo4j',
+                label: 'Neo4j',
+                status: 'unavailable',
+                detail: 'connection refused',
+                latency_ms: null,
+                checked_at: '2026-06-22T00:00:00Z',
+              },
+              {
+                name: 'worker',
+                label: 'Celery Worker',
+                status: 'unavailable',
+                detail: 'no worker replied',
+                latency_ms: null,
+                checked_at: '2026-06-22T00:00:00Z',
+              },
+              {
+                name: 'beat',
+                label: 'Celery Beat',
+                status: 'unavailable',
+                detail: 'heartbeat file not found',
+                latency_ms: null,
+                checked_at: '2026-06-22T00:00:00Z',
+              },
+            ],
             source_counts: { total: 2, indexed: 1, failed: 1, pending: 0, parsing: 0 },
             ingestion_jobs: { queued: 0, running: 1, succeeded: 0, failed: 1, canceled: 0 },
             failed_sources: [
@@ -1138,6 +1188,10 @@ describe('Lumen workbench', () => {
     await user.click(within(screen.getByRole('navigation', { name: '主导航' })).getByRole('button', { name: '状态' }))
 
     expect(await screen.findByText('系统状态')).toBeInTheDocument()
+    expect(await screen.findByText('平台服务')).toBeInTheDocument()
+    expect(screen.getByText('PostgreSQL')).toBeInTheDocument()
+    expect(screen.getByText('Elasticsearch')).toBeInTheDocument()
+    expect(screen.getByText('Celery Beat')).toBeInTheDocument()
     expect(screen.getByText('索引失败：1')).toBeInTheDocument()
     expect(screen.getByText('标签建议：2')).toBeInTheDocument()
     expect(screen.getByText('失败链接')).toBeInTheDocument()
@@ -1163,6 +1217,50 @@ describe('Lumen workbench', () => {
       'http://127.0.0.1:8000/api/sources/12/retry',
       expect.objectContaining({ method: 'POST' }),
     )
+  })
+
+  it('renders status view when service health payload is missing', async () => {
+    const defaultFetch = vi.mocked(fetch).getMockImplementation()
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      const method = init?.method ?? 'GET'
+
+      if (url.endsWith('/api/status') && method === 'GET') {
+        return jsonResponse({
+          runtime: {
+            llm_mode: 'llm',
+            llm_provider: 'openai-compatible',
+            llm_model: 'gpt-test',
+            llm_configured: true,
+            llm_fallback_enabled: true,
+            embedding_mode: 'hash',
+            configuration_hint: null,
+            latest_fallback_reason: null,
+            runtime_source: 'environment',
+            active_profile_id: null,
+            active_profile_name: null,
+          },
+          source_counts: { total: 2, indexed: 1, failed: 1, pending: 0, parsing: 0 },
+          ingestion_jobs: { queued: 0, running: 1, succeeded: 0, failed: 1, canceled: 0 },
+          failed_sources: [],
+          pending_tag_suggestion_count: 0,
+          latest_fallback_reason: null,
+          suggested_actions: [],
+        })
+      }
+
+      if (!defaultFetch) throw new Error(`Unhandled request: ${url}`)
+      return defaultFetch(input, init)
+    })
+
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(within(screen.getByRole('navigation', { name: '主导航' })).getByRole('button', { name: '状态' }))
+
+    const platformServices = await screen.findByText('平台服务')
+    expect(platformServices).toBeInTheDocument()
+    expect(within(platformServices.parentElement ?? document.body).getByText('0')).toBeInTheDocument()
   })
 
   it('supports controlled Agent configuration runs and reranker setup', async () => {
