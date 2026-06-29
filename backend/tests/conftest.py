@@ -24,6 +24,9 @@ def isolate_settings_from_dotenv(monkeypatch):
 
 @pytest.fixture()
 def client(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("LUMEN_BOOTSTRAP_USER_EMAIL", "admin@example.com")
+    monkeypatch.setenv("LUMEN_BOOTSTRAP_USER_PASSWORD", "admin-password")
+    monkeypatch.setenv("LUMEN_AUTH_SECRET_KEY", "test-auth-secret")
     monkeypatch.setenv("LUMEN_LLM_MODE", "extractive")
     monkeypatch.setenv("LUMEN_DATA_DIR", str(tmp_path / "data"))
     for env_var in (
@@ -42,6 +45,38 @@ def client(tmp_path: Path, monkeypatch):
 
     try:
         with TestClient(app) as test_client:
+            login = test_client.post(
+                "/api/auth/login",
+                json={"email": "admin@example.com", "password": "admin-password"},
+            )
+            assert login.status_code == 200
+            test_client.headers.update({"Authorization": f"Bearer {login.json()['access_token']}"})
+            get_settings.cache_clear()
             yield test_client
     finally:
         get_settings.cache_clear()
+
+
+@pytest.fixture()
+def anonymous_client(client):
+    original = client.headers.pop("Authorization", None)
+    try:
+        yield client
+    finally:
+        if original is not None:
+            client.headers.update({"Authorization": original})
+
+
+@pytest.fixture()
+def auth_headers(client):
+    def _headers(email: str, password: str = "test-password") -> dict[str, str]:
+        from service.auth import create_user
+        from service.db import SessionLocal
+
+        with SessionLocal() as db:
+            create_user(db, email=email, password=password)
+        login = client.post("/api/auth/login", json={"email": email, "password": password})
+        assert login.status_code == 200
+        return {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+    return _headers

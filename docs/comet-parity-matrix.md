@@ -13,8 +13,8 @@
 | --- | --- | --- | --- |
 | Docker 多服务运行栈 | PostgreSQL/Redis/backend/worker/frontend | 增加 Elasticsearch、Neo4j、beat 和完整健康检查 | Phase 0 |
 | 运行健康状态 | 模型、资料、任务摘要 | PostgreSQL、Redis、Elasticsearch、Neo4j、worker、beat 全部可见 | Phase 0 |
-| 多用户认证 | 无 | 邮箱密码、JWT/session、受保护路由 | Phase 1 |
-| 用户级数据隔离 | 无 | PostgreSQL/ES/Neo4j/文件/worker 全边界隔离 | Phase 1 |
+| 多用户认证 | 已具备邮箱密码、JWT access token、bootstrap 用户、登录页和受保护路由 | Refresh/session 续期可作为后续增强 | 已具备 |
+| 用户级数据隔离 | PostgreSQL 核心业务表、配置、Agent profile、worker job 已按 user scope 隔离 | ES/Neo4j 投影在 Phase 2/4 接入时继续继承 user scope | Phase 1 |
 | 多知识库 | 无显式知识库 | KnowledgeBase 模型、选择器、资料归属 | Phase 2 |
 | ES 混合检索 | hash embedding + 本地关键词 | Elasticsearch BM25/vector + rerank | Phase 2 |
 | 真实 embedding | hash embedding | provider profile 驱动真实 embedding | Phase 2 |
@@ -37,6 +37,14 @@
 ## Phase 0 验收
 
 - `docker compose up --build` 启动 PostgreSQL、Redis、Elasticsearch、Neo4j、backend、worker、beat、frontend。
-- `/api/status` 返回所有平台服务健康状态。
+- 使用 bootstrap 用户登录后，带 `Authorization: Bearer <token>` 调用 `/api/status` 返回所有平台服务健康状态。
 - 前端状态页显示所有平台服务。
 - 现有资料摄取和聊天 smoke 流程保持可用。
+
+## Phase 1 验收
+
+- `/api/auth/login` 返回 JWT access token，`/api/auth/me` 返回当前用户。
+- 未登录访问业务 API 返回 401。
+- 前端无 token 时展示登录页，登录后进入工作台，并为 API 请求携带 Bearer token。
+- sources、memories、conversations、ingestion jobs、tags、favorites、provider profiles、agent profiles、reranker profiles 和 tool logs 按当前用户隔离。
+- worker 从 ingestion job 读取 `user_id` 并使用 scoped repositories。

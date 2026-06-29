@@ -5,9 +5,10 @@ from bs4 import BeautifulSoup
 from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile
 from sqlalchemy.orm import Session
 
+from service.auth import get_current_user
 from service.core.ingestion import IngestionService, source_type_for_filename
 from service.db import get_db
-from service.models import Source
+from service.models import Source, User
 from service.repositories.chunks import ChunkRepository
 from service.repositories.sources import SourceRepository
 from service.schemas import (
@@ -34,7 +35,7 @@ def _failed_source(sources: SourceRepository, data: SourceCreate, message: str):
     return refreshed
 
 
-def _source_detail(source, db: Session) -> SourceDetailRead:
+def _source_detail(source, db: Session, user_id: int | None = None) -> SourceDetailRead:
     return SourceDetailRead.model_validate(
         {
             "id": source.id,
@@ -45,24 +46,24 @@ def _source_detail(source, db: Session) -> SourceDetailRead:
             "filename": source.filename,
             "error_message": source.error_message,
             "created_at": source.created_at,
-            "chunk_count": ChunkRepository(db).count_for_source(source.id),
+            "chunk_count": ChunkRepository(db, user_id=user_id).count_for_source(source.id),
         }
     )
 
 
-def _ingestion_service(db: Session) -> IngestionService:
-    return IngestionService(SourceRepository(db), ChunkRepository(db))
+def _ingestion_service(db: Session, user_id: int | None = None) -> IngestionService:
+    return IngestionService(SourceRepository(db, user_id=user_id), ChunkRepository(db, user_id=user_id))
 
 
 @router.post("", response_model=SourceRead)
-def create_source(data: SourceCreate, db: Session = Depends(get_db)):
-    return SourceRepository(db).create(data)
+def create_source(data: SourceCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return SourceRepository(db, user_id=current_user.id).create(data)
 
 
 @router.post("/upload", response_model=BulkUploadResult)
-async def upload_source(files: list[UploadFile] = File(), db: Session = Depends(get_db)):
-    sources = SourceRepository(db)
-    service = IngestionService(sources, ChunkRepository(db))
+async def upload_source(files: list[UploadFile] = File(), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    sources = SourceRepository(db, user_id=current_user.id)
+    service = IngestionService(sources, ChunkRepository(db, user_id=current_user.id))
 
     result_sources: list[Source] = []
     succeeded = 0
@@ -105,11 +106,11 @@ async def upload_source(files: list[UploadFile] = File(), db: Session = Depends(
 
 
 @router.post("/crawl", response_model=SourceRead)
-async def crawl_source(data: WebCrawlRequest, db: Session = Depends(get_db)):
-    sources = SourceRepository(db)
+async def crawl_source(data: WebCrawlRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    sources = SourceRepository(db, user_id=current_user.id)
     source = sources.create(SourceCreate(title=data.url, source_type="web_crawl", url=data.url))
     try:
-        service = IngestionService(sources, ChunkRepository(db))
+        service = IngestionService(sources, ChunkRepository(db, user_id=current_user.id))
         await service.parse_crawl_source(source.id, data)
         service.index_existing_source(source.id)
     except Exception as exc:
@@ -121,11 +122,11 @@ async def crawl_source(data: WebCrawlRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/link", response_model=SourceRead)
-async def capture_link(data: LinkCapture, db: Session = Depends(get_db)):
-    sources = SourceRepository(db)
+async def capture_link(data: LinkCapture, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    sources = SourceRepository(db, user_id=current_user.id)
     source = sources.create(SourceCreate(title=data.url, source_type="link", url=data.url))
     try:
-        service = IngestionService(sources, ChunkRepository(db))
+        service = IngestionService(sources, ChunkRepository(db, user_id=current_user.id))
         await service.parse_link_source(source.id)
         service.index_existing_source(source.id)
     except Exception as exc:
@@ -137,25 +138,25 @@ async def capture_link(data: LinkCapture, db: Session = Depends(get_db)):
 
 
 @router.get("", response_model=list[SourceRead])
-def list_sources(db: Session = Depends(get_db)):
-    return SourceRepository(db).list()
+def list_sources(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return SourceRepository(db, user_id=current_user.id).list()
 
 
 @router.get("/{source_id}", response_model=SourceDetailRead)
-def get_source(source_id: int, db: Session = Depends(get_db)):
-    sources = SourceRepository(db)
+def get_source(source_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    sources = SourceRepository(db, user_id=current_user.id)
     source = sources.get(source_id)
     if source is None:
         raise HTTPException(status_code=404, detail="Source not found")
-    return _source_detail(source, db)
+    return _source_detail(source, db, current_user.id)
 
 
 @router.post("/{source_id}/index", response_model=SourceRead)
-def index_source(source_id: int, db: Session = Depends(get_db)):
-    sources = SourceRepository(db)
+def index_source(source_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    sources = SourceRepository(db, user_id=current_user.id)
     if sources.get(source_id) is None:
         raise HTTPException(status_code=404, detail="Source not found")
-    service = IngestionService(sources, ChunkRepository(db))
+    service = IngestionService(sources, ChunkRepository(db, user_id=current_user.id))
     service.index_existing_source(source_id)
     source = sources.get(source_id)
     if source is None:
@@ -164,36 +165,36 @@ def index_source(source_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{source_id}/retry", response_model=SourceDetailRead)
-async def retry_source(source_id: int, db: Session = Depends(get_db)):
-    sources = SourceRepository(db)
+async def retry_source(source_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    sources = SourceRepository(db, user_id=current_user.id)
     source = sources.get(source_id)
     if source is None:
         raise HTTPException(status_code=404, detail="Source not found")
 
     try:
-        service_source = await _ingestion_service(db).retry_source(source_id)
+        service_source = await _ingestion_service(db, current_user.id).retry_source(source_id)
         refreshed = sources.get(service_source.id)
     except Exception as exc:
         sources.mark_failed(source.id, str(exc))
         refreshed = sources.get(source.id)
     if refreshed is None:
         raise HTTPException(status_code=404, detail="Source not found")
-    return _source_detail(refreshed, db)
+    return _source_detail(refreshed, db, current_user.id)
 
 
 @router.delete("/{source_id}", status_code=204)
-def delete_source(source_id: int, db: Session = Depends(get_db)):
-    sources = SourceRepository(db)
+def delete_source(source_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    sources = SourceRepository(db, user_id=current_user.id)
     if sources.get(source_id) is None:
         raise HTTPException(status_code=404, detail="Source not found")
-    ChunkRepository(db).delete_for_source(source_id)
+    ChunkRepository(db, user_id=current_user.id).delete_for_source(source_id)
     sources.delete(source_id)
     return Response(status_code=204)
 
 
 @router.post("/bookmarks", response_model=BulkUploadResult)
-async def import_bookmarks(data: BookmarkImportRequest, db: Session = Depends(get_db)):
-    sources = SourceRepository(db)
+async def import_bookmarks(data: BookmarkImportRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    sources = SourceRepository(db, user_id=current_user.id)
     soup = BeautifulSoup(data.html_content, "html.parser")
     bookmarks = []
 
@@ -222,8 +223,8 @@ async def import_bookmarks(data: BookmarkImportRequest, db: Session = Depends(ge
                         url=bm["url"],
                     )
                 )
-                await IngestionService(sources, ChunkRepository(db)).parse_bookmark_source(source.id)
-                IngestionService(sources, ChunkRepository(db)).index_existing_source(source.id)
+                await IngestionService(sources, ChunkRepository(db, user_id=current_user.id)).parse_bookmark_source(source.id)
+                IngestionService(sources, ChunkRepository(db, user_id=current_user.id)).index_existing_source(source.id)
                 return sources.get(source.id)
             except Exception:
                 logger.exception("Could not import bookmark %s", bm.get("url"))

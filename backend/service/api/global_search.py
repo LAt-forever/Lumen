@@ -1,8 +1,10 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
+from service.auth import get_current_user
 from service.core.global_search import GlobalSearchService
 from service.db import get_db
+from service.models import User
 from service.repositories.chunks import ChunkRepository
 from service.repositories.conversations import ConversationRepository
 from service.repositories.memories import MemoryRepository
@@ -31,12 +33,13 @@ def global_search(
     tag: str | None = None,
     favorite: bool = False,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     service = GlobalSearchService(
-        SourceRepository(db),
-        ChunkRepository(db),
-        MemoryRepository(db),
-        ConversationRepository(db),
-        OrganizationRepository(db),
+        SourceRepository(db, user_id=current_user.id),
+        ChunkRepository(db, user_id=current_user.id),
+        MemoryRepository(db, user_id=current_user.id),
+        ConversationRepository(db, user_id=current_user.id),
+        OrganizationRepository(db, user_id=current_user.id),
     )
     return service.search(q.strip(), result_types=_parse_types(types), tag=tag, favorite=favorite)

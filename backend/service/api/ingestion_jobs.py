@@ -7,9 +7,11 @@ from bs4 import BeautifulSoup
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
+from service.auth import get_current_user
 from service.core.ingestion import decode_text_upload, source_type_for_filename
 from service.core.storage import move_to_final, resolve_file_path, save_temp_upload
 from service.db import get_db
+from service.models import User
 from service.repositories.ingestion_jobs import IngestionJobRepository
 from service.repositories.sources import SourceRepository
 from service.schemas import (
@@ -63,9 +65,9 @@ def _batch_response(batch_id: str, jobs: list, sources: list) -> IngestionBatchR
     )
 
 
-def _enqueue_or_503(db: Session, job, source_id: int | None = None):
-    jobs = IngestionJobRepository(db)
-    sources = SourceRepository(db)
+def _enqueue_or_503(db: Session, job, source_id: int | None = None, user_id: int | None = None):
+    jobs = IngestionJobRepository(db, user_id=user_id)
+    sources = SourceRepository(db, user_id=user_id)
     try:
         result = process_ingestion_job.delay(job.id)
     except Exception as exc:
@@ -77,12 +79,12 @@ def _enqueue_or_503(db: Session, job, source_id: int | None = None):
 
 
 @router.post("/notes", response_model=IngestionBatchRead)
-def enqueue_note(data: SourceCreate, db: Session = Depends(get_db)):
+def enqueue_note(data: SourceCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if data.source_type != "note":
         raise HTTPException(status_code=422, detail="Only note sources can be submitted here")
     batch_id = str(uuid4())
-    sources = SourceRepository(db)
-    jobs = IngestionJobRepository(db)
+    sources = SourceRepository(db, user_id=current_user.id)
+    jobs = IngestionJobRepository(db, user_id=current_user.id)
     source = sources.create(data)
     job = jobs.create(
         job_type="note",
@@ -92,15 +94,15 @@ def enqueue_note(data: SourceCreate, db: Session = Depends(get_db)):
         progress_total=3,
         message="已加入队列",
     )
-    job = _enqueue_or_503(db, job, source.id)
+    job = _enqueue_or_503(db, job, source.id, current_user.id)
     return _batch_response(batch_id, [job], [source])
 
 
 @router.post("/uploads", response_model=IngestionBatchRead)
-async def enqueue_uploads(files: list[UploadFile] = File(), db: Session = Depends(get_db)):
+async def enqueue_uploads(files: list[UploadFile] = File(), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     batch_id = str(uuid4())
-    sources = SourceRepository(db)
-    jobs = IngestionJobRepository(db)
+    sources = SourceRepository(db, user_id=current_user.id)
+    jobs = IngestionJobRepository(db, user_id=current_user.id)
     created_jobs = []
     created_sources = []
 
@@ -145,7 +147,7 @@ async def enqueue_uploads(files: list[UploadFile] = File(), db: Session = Depend
                 progress_total=3,
                 message="已加入队列",
             )
-            job = _enqueue_or_503(db, job, source.id)
+            job = _enqueue_or_503(db, job, source.id, current_user.id)
         refreshed = sources.get(source.id)
         created_sources.append(refreshed or source)
         created_jobs.append(job)
@@ -154,10 +156,10 @@ async def enqueue_uploads(files: list[UploadFile] = File(), db: Session = Depend
 
 
 @router.post("/links", response_model=IngestionBatchRead)
-def enqueue_link(data: LinkCapture, db: Session = Depends(get_db)):
+def enqueue_link(data: LinkCapture, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     batch_id = str(uuid4())
-    sources = SourceRepository(db)
-    jobs = IngestionJobRepository(db)
+    sources = SourceRepository(db, user_id=current_user.id)
+    jobs = IngestionJobRepository(db, user_id=current_user.id)
     source = sources.create(SourceCreate(title=data.url, source_type="link", url=data.url))
     job = jobs.create(
         job_type="link",
@@ -167,15 +169,15 @@ def enqueue_link(data: LinkCapture, db: Session = Depends(get_db)):
         progress_total=3,
         message="已加入队列",
     )
-    job = _enqueue_or_503(db, job, source.id)
+    job = _enqueue_or_503(db, job, source.id, current_user.id)
     return _batch_response(batch_id, [job], [source])
 
 
 @router.post("/crawls", response_model=IngestionBatchRead)
-def enqueue_crawl(data: WebCrawlRequest, db: Session = Depends(get_db)):
+def enqueue_crawl(data: WebCrawlRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     batch_id = str(uuid4())
-    sources = SourceRepository(db)
-    jobs = IngestionJobRepository(db)
+    sources = SourceRepository(db, user_id=current_user.id)
+    jobs = IngestionJobRepository(db, user_id=current_user.id)
     source = sources.create(SourceCreate(title=data.url, source_type="web_crawl", url=data.url))
     job = jobs.create(
         job_type="crawl",
@@ -185,12 +187,12 @@ def enqueue_crawl(data: WebCrawlRequest, db: Session = Depends(get_db)):
         progress_total=3,
         message="已加入队列",
     )
-    job = _enqueue_or_503(db, job, source.id)
+    job = _enqueue_or_503(db, job, source.id, current_user.id)
     return _batch_response(batch_id, [job], [source])
 
 
 @router.post("/bookmarks", response_model=IngestionBatchRead)
-def enqueue_bookmarks(data: BookmarkImportRequest, db: Session = Depends(get_db)):
+def enqueue_bookmarks(data: BookmarkImportRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     soup = BeautifulSoup(data.html_content, "html.parser")
     bookmarks = []
     for dt in soup.find_all("dt"):
@@ -205,8 +207,8 @@ def enqueue_bookmarks(data: BookmarkImportRequest, db: Session = Depends(get_db)
         raise HTTPException(status_code=400, detail="No bookmarks found in HTML content")
 
     batch_id = str(uuid4())
-    sources = SourceRepository(db)
-    jobs = IngestionJobRepository(db)
+    sources = SourceRepository(db, user_id=current_user.id)
+    jobs = IngestionJobRepository(db, user_id=current_user.id)
     created_jobs = []
     created_sources = []
     for bookmark in bookmarks:
@@ -219,19 +221,19 @@ def enqueue_bookmarks(data: BookmarkImportRequest, db: Session = Depends(get_db)
             progress_total=3,
             message="已加入队列",
         )
-        created_jobs.append(_enqueue_or_503(db, job, source.id))
+        created_jobs.append(_enqueue_or_503(db, job, source.id, current_user.id))
         created_sources.append(source)
     return _batch_response(batch_id, created_jobs, created_sources)
 
 
 @router.post("/sources/{source_id}/index", response_model=IngestionBatchRead)
-def enqueue_source_index(source_id: int, db: Session = Depends(get_db)):
-    sources = SourceRepository(db)
+def enqueue_source_index(source_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    sources = SourceRepository(db, user_id=current_user.id)
     source = sources.get(source_id)
     if source is None:
         raise HTTPException(status_code=404, detail="Source not found")
     batch_id = str(uuid4())
-    jobs = IngestionJobRepository(db)
+    jobs = IngestionJobRepository(db, user_id=current_user.id)
     job = jobs.create(
         job_type="index",
         batch_id=batch_id,
@@ -240,20 +242,26 @@ def enqueue_source_index(source_id: int, db: Session = Depends(get_db)):
         progress_total=3,
         message="已加入队列",
     )
-    job = _enqueue_or_503(db, job, source.id)
+    job = _enqueue_or_503(db, job, source.id, current_user.id)
     return _batch_response(batch_id, [job], [source])
 
 
 @router.get("", response_model=list[IngestionJobRead])
-def list_jobs(status: str | None = None, batch_id: str | None = None, limit: int = 50, db: Session = Depends(get_db)):
+def list_jobs(
+    status: str | None = None,
+    batch_id: str | None = None,
+    limit: int = 50,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     bounded_limit = min(max(limit, 1), 100)
-    jobs = IngestionJobRepository(db).list_recent(status=status, batch_id=batch_id, limit=bounded_limit)
+    jobs = IngestionJobRepository(db, user_id=current_user.id).list_recent(status=status, batch_id=batch_id, limit=bounded_limit)
     return [_job_read(job) for job in jobs]
 
 
 @router.get("/batches/{batch_id}", response_model=IngestionBatchRead)
-def get_batch(batch_id: str, db: Session = Depends(get_db)):
-    jobs = IngestionJobRepository(db).list_for_batch(batch_id)
+def get_batch(batch_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    jobs = IngestionJobRepository(db, user_id=current_user.id).list_for_batch(batch_id)
     if not jobs:
         raise HTTPException(status_code=404, detail="Batch not found")
     sources = [job.source for job in jobs if job.source is not None]
@@ -261,18 +269,22 @@ def get_batch(batch_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/{job_id}", response_model=IngestionJobRead)
-def get_job(job_id: int, db: Session = Depends(get_db)):
-    job = IngestionJobRepository(db).get(job_id)
+def get_job(job_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    job = IngestionJobRepository(db, user_id=current_user.id).get(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Ingestion job not found")
     return _job_read(job)
 
 
 @router.post("/{job_id}/cancel", response_model=IngestionJobRead)
-def cancel_job(job_id: int, db: Session = Depends(get_db)):
-    job = IngestionJobRepository(db).cancel_queued(job_id)
+def cancel_job(job_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    repository = IngestionJobRepository(db, user_id=current_user.id)
+    try:
+        job = repository.cancel_queued(job_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Ingestion job not found") from exc
     if job is None:
-        existing = IngestionJobRepository(db).get(job_id)
+        existing = repository.get(job_id)
         if existing is None:
             raise HTTPException(status_code=404, detail="Ingestion job not found")
         raise HTTPException(status_code=409, detail="Only queued jobs can be canceled")
@@ -280,8 +292,8 @@ def cancel_job(job_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{job_id}/retry", response_model=IngestionBatchRead)
-def retry_job(job_id: int, db: Session = Depends(get_db)):
-    jobs = IngestionJobRepository(db)
+def retry_job(job_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    jobs = IngestionJobRepository(db, user_id=current_user.id)
     original = jobs.get(job_id)
     if original is None:
         raise HTTPException(status_code=404, detail="Ingestion job not found")
@@ -296,6 +308,6 @@ def retry_job(job_id: int, db: Session = Depends(get_db)):
         progress_total=original.progress_total,
         message="已加入队列",
     )
-    new_job = _enqueue_or_503(db, new_job, original.source_id)
+    new_job = _enqueue_or_503(db, new_job, original.source_id, current_user.id)
     sources = [new_job.source] if new_job.source is not None else []
     return _batch_response(batch_id, [new_job], sources)

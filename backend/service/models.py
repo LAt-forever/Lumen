@@ -7,10 +7,22 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from service.db import Base
 
 
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    email: Mapped[str] = mapped_column(String(320), nullable=False, unique=True, index=True)
+    password_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
 class Source(Base):
     __tablename__ = "sources"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
     title: Mapped[str] = mapped_column(String(300), nullable=False)
     source_type: Mapped[str] = mapped_column(String(40), nullable=False)
     url: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
@@ -42,6 +54,7 @@ class IngestionJob(Base):
     __tablename__ = "ingestion_jobs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
     batch_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
     source_id: Mapped[Optional[int]] = mapped_column(ForeignKey("sources.id"), nullable=True, index=True)
     job_type: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
@@ -64,6 +77,7 @@ class Conversation(Base):
     __tablename__ = "conversations"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
     title: Mapped[str] = mapped_column(String(300), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
 
@@ -96,6 +110,7 @@ class MemoryCandidate(Base):
     __tablename__ = "memory_candidates"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
     text: Mapped[str] = mapped_column(Text, nullable=False)
     memory_type: Mapped[str] = mapped_column(String(40), nullable=False)
     source_kind: Mapped[str] = mapped_column(String(40), nullable=False)
@@ -109,6 +124,7 @@ class Memory(Base):
     __tablename__ = "memories"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
     text: Mapped[str] = mapped_column(Text, nullable=False)
     memory_type: Mapped[str] = mapped_column(String(40), nullable=False)
     provenance: Mapped[str] = mapped_column(Text, nullable=False)
@@ -120,10 +136,11 @@ class Memory(Base):
 class MemoryRelation(Base):
     __tablename__ = "memory_relations"
     __table_args__ = (
-        UniqueConstraint("source_memory_id", "target_memory_id", "relation_type", name="uq_memory_relation_pair_type"),
+        UniqueConstraint("user_id", "source_memory_id", "target_memory_id", "relation_type", name="uq_memory_relation_pair_type"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
     source_memory_id: Mapped[int] = mapped_column(ForeignKey("memories.id"), nullable=False, index=True)
     target_memory_id: Mapped[int] = mapped_column(ForeignKey("memories.id"), nullable=False, index=True)
     relation_type: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
@@ -139,9 +156,10 @@ class MemoryRelation(Base):
 
 class Tag(Base):
     __tablename__ = "tags"
-    __table_args__ = (UniqueConstraint("normalized_name", name="uq_tags_normalized_name"),)
+    __table_args__ = (UniqueConstraint("user_id", "normalized_name", name="uq_tags_normalized_name"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     normalized_name: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
     color: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
@@ -153,9 +171,10 @@ class Tag(Base):
 
 class TagAssignment(Base):
     __tablename__ = "tag_assignments"
-    __table_args__ = (UniqueConstraint("tag_id", "target_type", "target_id", name="uq_tag_assignment_target"),)
+    __table_args__ = (UniqueConstraint("user_id", "tag_id", "target_type", "target_id", name="uq_tag_assignment_target"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
     tag_id: Mapped[int] = mapped_column(ForeignKey("tags.id"), nullable=False, index=True)
     target_type: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
     target_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
@@ -169,6 +188,7 @@ class TagSuggestion(Base):
     __tablename__ = "tag_suggestions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
     label: Mapped[str] = mapped_column(String(120), nullable=False)
     target_type: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
     target_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
@@ -181,9 +201,10 @@ class TagSuggestion(Base):
 
 class Favorite(Base):
     __tablename__ = "favorites"
-    __table_args__ = (UniqueConstraint("target_type", "target_id", name="uq_favorite_target"),)
+    __table_args__ = (UniqueConstraint("user_id", "target_type", "target_id", name="uq_favorite_target"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
     target_type: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
     target_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
@@ -193,6 +214,7 @@ class LLMProviderProfile(Base):
     __tablename__ = "llm_provider_profiles"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     provider: Mapped[str] = mapped_column(String(80), default="openai-compatible", nullable=False)
     base_url: Mapped[str] = mapped_column(String(1000), nullable=False)
@@ -212,6 +234,7 @@ class AgentProfile(Base):
     __tablename__ = "agent_profiles"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     instructions: Mapped[str] = mapped_column(Text, nullable=False)
     enabled_tools_json: Mapped[str] = mapped_column(Text, default="[]", nullable=False)
@@ -227,6 +250,7 @@ class AgentToolLog(Base):
     __tablename__ = "agent_tool_logs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
     profile_id: Mapped[Optional[int]] = mapped_column(ForeignKey("agent_profiles.id"), nullable=True, index=True)
     tool_name: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
     action: Mapped[str] = mapped_column(String(120), nullable=False)
@@ -243,6 +267,7 @@ class RerankerProfile(Base):
     __tablename__ = "reranker_profiles"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     provider: Mapped[str] = mapped_column(String(80), default="openai-compatible", nullable=False)
     base_url: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)

@@ -5,14 +5,17 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from service.api.router import router
+from service.auth import ensure_bootstrap_user
 from service.core.security import configure_log_redaction
-from service.db import init_db
+from service import db as dbmod
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     configure_log_redaction()
-    init_db()
+    dbmod.init_db()
+    with dbmod.SessionLocal() as db:
+        ensure_bootstrap_user(db)
     yield
 
 

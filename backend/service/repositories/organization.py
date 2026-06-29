@@ -11,27 +11,53 @@ def normalize_tag_name(name: str) -> str:
 
 
 class OrganizationRepository:
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, user_id: int | None = None):
         self.db = db
+        self.user_id = user_id
+
+    def _tag_filter(self, stmt):
+        if self.user_id is not None:
+            return stmt.where(Tag.user_id == self.user_id)
+        return stmt
+
+    def _assignment_filter(self, stmt):
+        if self.user_id is not None:
+            return stmt.where(TagAssignment.user_id == self.user_id)
+        return stmt
+
+    def _suggestion_filter(self, stmt):
+        if self.user_id is not None:
+            return stmt.where(TagSuggestion.user_id == self.user_id)
+        return stmt
+
+    def _favorite_filter(self, stmt):
+        if self.user_id is not None:
+            return stmt.where(Favorite.user_id == self.user_id)
+        return stmt
 
     def list_tags(self) -> list[Tag]:
-        stmt = select(Tag).order_by(Tag.name.asc(), Tag.id.asc())
+        stmt = self._tag_filter(select(Tag)).order_by(Tag.name.asc(), Tag.id.asc())
         return list(self.db.scalars(stmt))
 
     def create_tag(self, name: str, color: str | None = None) -> Tag:
         cleaned = re.sub(r"\s+", " ", name.strip())
         normalized = normalize_tag_name(cleaned)
-        existing = self.db.scalar(select(Tag).where(Tag.normalized_name == normalized))
+        stmt = select(Tag).where(Tag.normalized_name == normalized)
+        if self.user_id is not None:
+            stmt = stmt.where(Tag.user_id == self.user_id)
+        existing = self.db.scalar(stmt)
         if existing is not None:
             return existing
-        tag = Tag(name=cleaned, normalized_name=normalized, color=color)
+        tag = Tag(user_id=self.user_id, name=cleaned, normalized_name=normalized, color=color)
         self.db.add(tag)
         self.db.commit()
         self.db.refresh(tag)
         return tag
 
     def get_tag(self, tag_id: int) -> Tag | None:
-        return self.db.get(Tag, tag_id)
+        if self.user_id is None:
+            return self.db.get(Tag, tag_id)
+        return self.db.scalar(select(Tag).where(Tag.id == tag_id, Tag.user_id == self.user_id))
 
     def assign_tag(self, tag_id: int, target_type: str, target_id: int, source: str = "user") -> TagAssignment:
         existing = self.db.scalar(
@@ -43,9 +69,20 @@ class OrganizationRepository:
                 TagAssignment.target_id == target_id,
             )
         )
+        if self.user_id is not None:
+            existing = self.db.scalar(
+                select(TagAssignment)
+                .options(selectinload(TagAssignment.tag))
+                .where(
+                    TagAssignment.user_id == self.user_id,
+                    TagAssignment.tag_id == tag_id,
+                    TagAssignment.target_type == target_type,
+                    TagAssignment.target_id == target_id,
+                )
+            )
         if existing is not None:
             return existing
-        assignment = TagAssignment(tag_id=tag_id, target_type=target_type, target_id=target_id, source=source)
+        assignment = TagAssignment(user_id=self.user_id, tag_id=tag_id, target_type=target_type, target_id=target_id, source=source)
         self.db.add(assignment)
         self.db.commit()
         self.db.refresh(assignment)
@@ -53,7 +90,10 @@ class OrganizationRepository:
         return assignment
 
     def delete_assignment(self, assignment_id: int) -> None:
-        assignment = self.db.get(TagAssignment, assignment_id)
+        if self.user_id is None:
+            assignment = self.db.get(TagAssignment, assignment_id)
+        else:
+            assignment = self.db.scalar(select(TagAssignment).where(TagAssignment.id == assignment_id, TagAssignment.user_id == self.user_id))
         if assignment is not None:
             self.db.delete(assignment)
             self.db.commit()
@@ -65,10 +105,14 @@ class OrganizationRepository:
             .where(TagAssignment.target_type == target_type, TagAssignment.target_id == target_id)
             .order_by(TagAssignment.created_at.desc(), TagAssignment.id.desc())
         )
+        if self.user_id is not None:
+            stmt = stmt.where(TagAssignment.user_id == self.user_id)
         return list(self.db.scalars(stmt))
 
     def list_assignments(self) -> list[TagAssignment]:
         stmt = select(TagAssignment).options(selectinload(TagAssignment.tag)).order_by(TagAssignment.created_at.desc(), TagAssignment.id.desc())
+        if self.user_id is not None:
+            stmt = stmt.where(TagAssignment.user_id == self.user_id)
         return list(self.db.scalars(stmt))
 
     def create_suggestion(self, label: str, target_type: str, target_id: int, reason: str, confidence: int = 70) -> TagSuggestion:
@@ -77,6 +121,7 @@ class OrganizationRepository:
         existing = list(
             self.db.scalars(
                 select(TagSuggestion).where(
+                    TagSuggestion.user_id == self.user_id if self.user_id is not None else True,
                     TagSuggestion.target_type == target_type,
                     TagSuggestion.target_id == target_id,
                 )
@@ -86,6 +131,7 @@ class OrganizationRepository:
             if normalize_tag_name(suggestion.label) == normalized:
                 return suggestion
         suggestion = TagSuggestion(
+            user_id=self.user_id,
             label=cleaned,
             target_type=target_type,
             target_id=target_id,
@@ -99,6 +145,8 @@ class OrganizationRepository:
 
     def pending_suggestions(self, target_type: str | None = None, target_id: int | None = None) -> list[TagSuggestion]:
         stmt = select(TagSuggestion).where(TagSuggestion.status == "pending")
+        if self.user_id is not None:
+            stmt = stmt.where(TagSuggestion.user_id == self.user_id)
         if target_type is not None:
             stmt = stmt.where(TagSuggestion.target_type == target_type)
         if target_id is not None:
@@ -110,7 +158,10 @@ class OrganizationRepository:
         return len(self.pending_suggestions())
 
     def confirm_suggestion(self, suggestion_id: int) -> TagAssignment:
-        suggestion = self.db.get(TagSuggestion, suggestion_id)
+        if self.user_id is None:
+            suggestion = self.db.get(TagSuggestion, suggestion_id)
+        else:
+            suggestion = self.db.scalar(select(TagSuggestion).where(TagSuggestion.id == suggestion_id, TagSuggestion.user_id == self.user_id))
         if suggestion is None:
             raise ValueError(f"suggestion {suggestion_id} not found")
         if suggestion.status != "pending":
@@ -124,7 +175,10 @@ class OrganizationRepository:
         return assignment
 
     def ignore_suggestion(self, suggestion_id: int) -> TagSuggestion:
-        suggestion = self.db.get(TagSuggestion, suggestion_id)
+        if self.user_id is None:
+            suggestion = self.db.get(TagSuggestion, suggestion_id)
+        else:
+            suggestion = self.db.scalar(select(TagSuggestion).where(TagSuggestion.id == suggestion_id, TagSuggestion.user_id == self.user_id))
         if suggestion is None:
             raise ValueError(f"suggestion {suggestion_id} not found")
         if suggestion.status != "pending":
@@ -135,27 +189,38 @@ class OrganizationRepository:
         return suggestion
 
     def favorite(self, target_type: str, target_id: int) -> Favorite:
-        existing = self.db.scalar(select(Favorite).where(Favorite.target_type == target_type, Favorite.target_id == target_id))
+        stmt = select(Favorite).where(Favorite.target_type == target_type, Favorite.target_id == target_id)
+        if self.user_id is not None:
+            stmt = stmt.where(Favorite.user_id == self.user_id)
+        existing = self.db.scalar(stmt)
         if existing is not None:
             return existing
-        favorite = Favorite(target_type=target_type, target_id=target_id)
+        favorite = Favorite(user_id=self.user_id, target_type=target_type, target_id=target_id)
         self.db.add(favorite)
         self.db.commit()
         self.db.refresh(favorite)
         return favorite
 
     def unfavorite(self, target_type: str, target_id: int) -> None:
-        favorite = self.db.scalar(select(Favorite).where(Favorite.target_type == target_type, Favorite.target_id == target_id))
+        stmt = select(Favorite).where(Favorite.target_type == target_type, Favorite.target_id == target_id)
+        if self.user_id is not None:
+            stmt = stmt.where(Favorite.user_id == self.user_id)
+        favorite = self.db.scalar(stmt)
         if favorite is not None:
             self.db.delete(favorite)
             self.db.commit()
 
     def list_favorites(self, target_type: str | None = None) -> list[Favorite]:
         stmt = select(Favorite)
+        if self.user_id is not None:
+            stmt = stmt.where(Favorite.user_id == self.user_id)
         if target_type is not None:
             stmt = stmt.where(Favorite.target_type == target_type)
         stmt = stmt.order_by(Favorite.created_at.desc(), Favorite.id.desc())
         return list(self.db.scalars(stmt))
 
     def is_favorite(self, target_type: str, target_id: int) -> bool:
-        return self.db.scalar(select(Favorite.id).where(Favorite.target_type == target_type, Favorite.target_id == target_id)) is not None
+        stmt = select(Favorite.id).where(Favorite.target_type == target_type, Favorite.target_id == target_id)
+        if self.user_id is not None:
+            stmt = stmt.where(Favorite.user_id == self.user_id)
+        return self.db.scalar(stmt) is not None

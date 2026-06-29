@@ -75,6 +75,10 @@ services:
       LUMEN_UPLOAD_STORAGE_PATH: /app/data/uploads
       LUMEN_BEAT_HEARTBEAT_PATH: /app/data/beat-heartbeat.json
       LUMEN_LLM_MODE: extractive
+      LUMEN_AUTH_SECRET_KEY: lumen-local-compose-secret-change-me
+      LUMEN_BOOTSTRAP_USER_EMAIL: admin@example.com
+      LUMEN_BOOTSTRAP_USER_PASSWORD: admin-password
+      LUMEN_REGISTRATION_ENABLED: "false"
     depends_on:
       postgres:
         condition: service_healthy
@@ -111,6 +115,10 @@ services:
       LUMEN_UPLOAD_STORAGE_PATH: /app/data/uploads
       LUMEN_BEAT_HEARTBEAT_PATH: /app/data/beat-heartbeat.json
       LUMEN_LLM_MODE: extractive
+      LUMEN_AUTH_SECRET_KEY: lumen-local-compose-secret-change-me
+      LUMEN_BOOTSTRAP_USER_EMAIL: admin@example.com
+      LUMEN_BOOTSTRAP_USER_PASSWORD: admin-password
+      LUMEN_REGISTRATION_ENABLED: "false"
     depends_on:
       postgres:
         condition: service_healthy
@@ -132,6 +140,10 @@ services:
       LUMEN_DATA_DIR: /app/data
       LUMEN_BEAT_HEARTBEAT_PATH: /app/data/beat-heartbeat.json
       LUMEN_LLM_MODE: extractive
+      LUMEN_AUTH_SECRET_KEY: lumen-local-compose-secret-change-me
+      LUMEN_BOOTSTRAP_USER_EMAIL: admin@example.com
+      LUMEN_BOOTSTRAP_USER_PASSWORD: admin-password
+      LUMEN_REGISTRATION_ENABLED: "false"
     depends_on:
       redis:
         condition: service_healthy

@@ -77,13 +77,14 @@ def process_ingestion_job(job_id: int) -> None:
 def run_ingestion_job(job_id: int) -> None:
     dbmod.init_db()
     with dbmod.SessionLocal() as db:
-        jobs = IngestionJobRepository(db)
-        sources = SourceRepository(db)
-        chunks = ChunkRepository(db)
-        job = jobs.get(job_id)
+        unscoped_jobs = IngestionJobRepository(db)
+        job = unscoped_jobs.get(job_id)
         if job is None:
             logger.warning("Ingestion job %s not found", job_id)
             return
+        jobs = IngestionJobRepository(db, user_id=job.user_id)
+        sources = SourceRepository(db, user_id=job.user_id)
+        chunks = ChunkRepository(db, user_id=job.user_id)
         if job.status == "canceled":
             return
         if job.status not in ("queued", "running"):

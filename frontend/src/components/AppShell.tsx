@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { LogOut } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
 import { useRuntimeSettings } from '../api/hooks'
@@ -27,9 +28,11 @@ export type NavItem = {
 
 type AppShellProps = {
   navItems: NavItem[]
+  accountLabel?: string
+  onLogout?: () => void
 }
 
-export function AppShell({ navItems }: AppShellProps) {
+export function AppShell({ accountLabel, navItems, onLogout }: AppShellProps) {
   const [lastResponse, setLastResponse] = useState<ChatResponse>()
   const [streamingAnswer, setStreamingAnswer] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
@@ -136,6 +139,15 @@ export function AppShell({ navItems }: AppShellProps) {
             )
           })}
         </nav>
+        {accountLabel && onLogout ? (
+          <div className="sidebar-account">
+            <span>{accountLabel}</span>
+            <button aria-label="退出登录" className="icon-text-button" onClick={onLogout} type="button">
+              <LogOut size={16} strokeWidth={1.9} aria-hidden="true" />
+              <span>退出</span>
+            </button>
+          </div>
+        ) : null}
       </aside>
 
       <main className={`workbench${activeView === 'today' || activeView === 'ask' || activeView === 'library' ? '' : ' single-pane'}`}>
