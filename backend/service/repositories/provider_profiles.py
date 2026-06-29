@@ -58,6 +58,17 @@ class ProviderProfileRepository:
             raise ValueError(f"provider profile {profile_id} not found")
 
         payload = data.model_dump(exclude_unset=True)
+        embedding_affecting_fields = {
+            "supports_embedding",
+            "embedding_model",
+            "embedding_dimensions",
+            "base_url",
+            "provider",
+            "api_key",
+            "clear_api_key",
+            "timeout_seconds",
+        }
+        reset_embedding_test = bool(embedding_affecting_fields.intersection(payload))
         clear_api_key = bool(payload.pop("clear_api_key", False))
         if clear_api_key:
             profile.api_key = None
@@ -71,6 +82,11 @@ class ProviderProfileRepository:
 
         for field, value in payload.items():
             setattr(profile, field, value)
+
+        if reset_embedding_test:
+            profile.embedding_status = "untested"
+            profile.embedding_last_error = None
+            profile.embedding_last_checked_at = None
 
         self.db.commit()
         self.db.refresh(profile)
@@ -102,6 +118,17 @@ class ProviderProfileRepository:
         profile.status = status
         profile.last_error = last_error
         profile.last_checked_at = datetime.now(UTC).replace(tzinfo=None)
+        self.db.commit()
+        self.db.refresh(profile)
+        return profile
+
+    def mark_embedding_test_result(self, profile_id: int, status: str, last_error: str | None) -> LLMProviderProfile:
+        profile = self.get(profile_id)
+        if profile is None:
+            raise ValueError(f"provider profile {profile_id} not found")
+        profile.embedding_status = status
+        profile.embedding_last_error = last_error
+        profile.embedding_last_checked_at = datetime.now(UTC).replace(tzinfo=None)
         self.db.commit()
         self.db.refresh(profile)
         return profile

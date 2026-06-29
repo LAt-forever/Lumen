@@ -417,6 +417,10 @@ class LLMProviderProfileCreate(BaseModel):
     timeout_seconds: float = Field(default=30.0, gt=0)
     fallback_enabled: bool = True
     is_active: bool = False
+    supports_chat: bool = True
+    supports_embedding: bool = False
+    embedding_model: str | None = Field(default=None, max_length=200)
+    embedding_dimensions: int | None = Field(default=None, ge=1, le=8192)
 
 
 class LLMProviderProfileUpdate(BaseModel):
@@ -425,6 +429,13 @@ class LLMProviderProfileUpdate(BaseModel):
     base_url: str | None = Field(default=None, min_length=1, max_length=1000)
     model: str | None = Field(default=None, min_length=1, max_length=200)
     api_key: str | None = None
+    timeout_seconds: float | None = Field(default=None, gt=0)
+    fallback_enabled: bool | None = None
+    is_active: bool | None = None
+    supports_chat: bool | None = None
+    supports_embedding: bool | None = None
+    embedding_model: str | None = Field(default=None, max_length=200)
+    embedding_dimensions: int | None = Field(default=None, ge=1, le=8192)
     clear_api_key: bool = False
 
 
@@ -537,6 +548,13 @@ class LLMProviderProfileRead(BaseModel):
     timeout_seconds: float
     fallback_enabled: bool
     is_active: bool
+    supports_chat: bool
+    supports_embedding: bool
+    embedding_model: str | None
+    embedding_dimensions: int | None
+    embedding_status: ProviderProfileStatus
+    embedding_last_error: str | None
+    embedding_last_checked_at: datetime | None
     status: ProviderProfileStatus
     last_error: str | None
     last_checked_at: datetime | None

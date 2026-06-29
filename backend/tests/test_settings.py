@@ -93,18 +93,31 @@ def test_provider_profile_responses_omit_raw_api_key(client):
             "timeout_seconds": 12,
             "fallback_enabled": True,
             "is_active": True,
+            "supports_chat": True,
+            "supports_embedding": True,
+            "embedding_model": "text-embedding-3-small",
+            "embedding_dimensions": 1536,
         },
     )
 
     assert created.status_code == 200
     payload = created.json()
     assert payload["api_key_configured"] is True
+    assert payload["supports_chat"] is True
+    assert payload["supports_embedding"] is True
+    assert payload["embedding_model"] == "text-embedding-3-small"
+    assert payload["embedding_dimensions"] == 1536
+    assert payload["embedding_status"] == "untested"
+    assert payload["embedding_last_error"] is None
+    assert payload["embedding_last_checked_at"] is None
     assert "api_key" not in payload
     assert "secret-key" not in created.text
 
     listed = client.get("/api/settings/provider-profiles")
     assert listed.status_code == 200
     assert listed.json()[0]["api_key_configured"] is True
+    assert listed.json()[0]["supports_embedding"] is True
+    assert listed.json()[0]["embedding_model"] == "text-embedding-3-small"
     assert "secret-key" not in listed.text
 
 
@@ -152,10 +165,21 @@ def test_provider_profile_update_preserves_or_clears_key(client):
 
     preserved = client.patch(
         f"/api/settings/provider-profiles/{profile['id']}",
-        json={"name": "Renamed", "model": "gpt-renamed"},
+        json={
+            "name": "Renamed",
+            "model": "gpt-renamed",
+            "supports_chat": False,
+            "supports_embedding": True,
+            "embedding_model": "embed-renamed",
+            "embedding_dimensions": 768,
+        },
     ).json()
     assert preserved["name"] == "Renamed"
     assert preserved["model"] == "gpt-renamed"
+    assert preserved["supports_chat"] is False
+    assert preserved["supports_embedding"] is True
+    assert preserved["embedding_model"] == "embed-renamed"
+    assert preserved["embedding_dimensions"] == 768
     assert preserved["api_key_configured"] is True
 
     cleared = client.patch(
@@ -309,3 +333,252 @@ def test_provider_profile_connection_test_marks_failed_without_secret(client, mo
     assert payload["status"] == "failed"
     assert "provider rejected" in payload["last_error"]
     assert "failed-secret" not in response.text
+
+
+def test_provider_profile_embedding_test_marks_ready(client, monkeypatch):
+    import service.api.settings as settings_api
+
+    class FakeProvider:
+        def __init__(self, config):
+            self.config = config
+
+        def embed_many(self, texts):
+            assert texts == ["Lumen embedding smoke"]
+            assert self.config.api_key == "embedding-secret"
+            assert self.config.model == "embed-model"
+            assert self.config.dimensions == 3
+            return [[1.0, 0.0, 0.0]]
+
+    monkeypatch.setattr(settings_api, "OpenAICompatibleEmbeddingProvider", FakeProvider)
+    profile = client.post(
+        "/api/settings/provider-profiles",
+        json={
+            "name": "Embedding Ready",
+            "provider": "openai-compatible",
+            "base_url": "https://ready.test/v1",
+            "model": "gpt-ready",
+            "api_key": "embedding-secret",
+            "timeout_seconds": 10,
+            "fallback_enabled": True,
+            "supports_embedding": True,
+            "embedding_model": "embed-model",
+            "embedding_dimensions": 3,
+        },
+    ).json()
+
+    response = client.post(f"/api/settings/provider-profiles/{profile['id']}/test-embedding")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["embedding_status"] == "ready"
+    assert payload["embedding_last_error"] is None
+    assert payload["embedding_last_checked_at"] is not None
+    assert "embedding-secret" not in response.text
+
+
+def test_provider_profile_embedding_test_marks_failed_without_secret(client, monkeypatch):
+    import service.api.settings as settings_api
+
+    class FailingProvider:
+        def __init__(self, config):
+            self.config = config
+
+        def embed_many(self, texts):
+            raise ValueError(f"provider rejected {self.config.api_key}")
+
+    monkeypatch.setattr(settings_api, "OpenAICompatibleEmbeddingProvider", FailingProvider)
+    profile = client.post(
+        "/api/settings/provider-profiles",
+        json={
+            "name": "Embedding Failed",
+            "provider": "openai-compatible",
+            "base_url": "https://failed.test/v1",
+            "model": "gpt-failed",
+            "api_key": "embedding-failed-secret",
+            "timeout_seconds": 10,
+            "fallback_enabled": True,
+            "supports_embedding": True,
+            "embedding_model": "embed-model",
+            "embedding_dimensions": 3,
+        },
+    ).json()
+
+    response = client.post(f"/api/settings/provider-profiles/{profile['id']}/test-embedding")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["embedding_status"] == "failed"
+    assert "provider rejected" in payload["embedding_last_error"]
+    assert "embedding-failed-secret" not in response.text
+
+
+def test_provider_profile_embedding_test_requires_embedding_support(client, monkeypatch):
+    import service.api.settings as settings_api
+
+    class UnexpectedProvider:
+        def __init__(self, config):
+            self.config = config
+
+        def embed_many(self, texts):
+            raise AssertionError("embedding provider should not be called")
+
+    monkeypatch.setattr(settings_api, "OpenAICompatibleEmbeddingProvider", UnexpectedProvider)
+    profile = client.post(
+        "/api/settings/provider-profiles",
+        json={
+            "name": "Embedding Unsupported",
+            "provider": "openai-compatible",
+            "base_url": "https://unsupported.test/v1",
+            "model": "gpt-ready",
+            "api_key": "embedding-secret",
+            "timeout_seconds": 10,
+            "fallback_enabled": True,
+            "supports_embedding": False,
+            "embedding_model": "embed-model",
+            "embedding_dimensions": 3,
+        },
+    ).json()
+
+    response = client.post(f"/api/settings/provider-profiles/{profile['id']}/test-embedding")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["supports_embedding"] is False
+    assert payload["embedding_status"] == "failed"
+    assert "embedding support" in payload["embedding_last_error"]
+    assert payload["embedding_last_checked_at"] is not None
+    assert "embedding-secret" not in response.text
+
+    listed = client.get("/api/settings/provider-profiles").json()[0]
+    assert listed["embedding_status"] == "failed"
+    assert "embedding support" in listed["embedding_last_error"]
+
+
+def test_provider_profile_embedding_update_resets_embedding_test_state(client, monkeypatch):
+    import service.api.settings as settings_api
+
+    class FakeProvider:
+        def __init__(self, config):
+            self.config = config
+
+        def embed_many(self, texts):
+            return [[1.0, 0.0, 0.0]]
+
+    monkeypatch.setattr(settings_api, "OpenAICompatibleEmbeddingProvider", FakeProvider)
+    profile = client.post(
+        "/api/settings/provider-profiles",
+        json={
+            "name": "Embedding Reset",
+            "provider": "openai-compatible",
+            "base_url": "https://ready.test/v1",
+            "model": "gpt-ready",
+            "api_key": "embedding-secret",
+            "timeout_seconds": 10,
+            "fallback_enabled": True,
+            "supports_embedding": True,
+            "embedding_model": "embed-model",
+            "embedding_dimensions": 3,
+        },
+    ).json()
+    ready = client.post(f"/api/settings/provider-profiles/{profile['id']}/test-embedding").json()
+    assert ready["embedding_status"] == "ready"
+    assert ready["embedding_last_checked_at"] is not None
+
+    updated = client.patch(
+        f"/api/settings/provider-profiles/{profile['id']}",
+        json={"embedding_model": "embed-model-v2"},
+    )
+
+    assert updated.status_code == 200
+    payload = updated.json()
+    assert payload["embedding_model"] == "embed-model-v2"
+    assert payload["embedding_status"] == "untested"
+    assert payload["embedding_last_error"] is None
+    assert payload["embedding_last_checked_at"] is None
+
+
+def test_provider_profile_clear_api_key_resets_embedding_test_state(client, monkeypatch):
+    import service.api.settings as settings_api
+
+    class FakeProvider:
+        def __init__(self, config):
+            self.config = config
+
+        def embed_many(self, texts):
+            return [[1.0, 0.0, 0.0]]
+
+    monkeypatch.setattr(settings_api, "OpenAICompatibleEmbeddingProvider", FakeProvider)
+    profile = client.post(
+        "/api/settings/provider-profiles",
+        json={
+            "name": "Embedding Key Reset",
+            "provider": "openai-compatible",
+            "base_url": "https://ready.test/v1",
+            "model": "gpt-ready",
+            "api_key": "embedding-secret",
+            "timeout_seconds": 10,
+            "fallback_enabled": True,
+            "supports_embedding": True,
+            "embedding_model": "embed-model",
+            "embedding_dimensions": 3,
+        },
+    ).json()
+    ready = client.post(f"/api/settings/provider-profiles/{profile['id']}/test-embedding").json()
+    assert ready["embedding_status"] == "ready"
+    assert ready["embedding_last_checked_at"] is not None
+
+    updated = client.patch(
+        f"/api/settings/provider-profiles/{profile['id']}",
+        json={"clear_api_key": True},
+    )
+
+    assert updated.status_code == 200
+    payload = updated.json()
+    assert payload["api_key_configured"] is False
+    assert payload["embedding_status"] == "untested"
+    assert payload["embedding_last_error"] is None
+    assert payload["embedding_last_checked_at"] is None
+
+
+def test_provider_profile_timeout_update_resets_embedding_test_state(client, monkeypatch):
+    import service.api.settings as settings_api
+
+    class FakeProvider:
+        def __init__(self, config):
+            self.config = config
+
+        def embed_many(self, texts):
+            assert self.config.timeout_seconds == 10
+            return [[1.0, 0.0, 0.0]]
+
+    monkeypatch.setattr(settings_api, "OpenAICompatibleEmbeddingProvider", FakeProvider)
+    profile = client.post(
+        "/api/settings/provider-profiles",
+        json={
+            "name": "Embedding Timeout Reset",
+            "provider": "openai-compatible",
+            "base_url": "https://ready.test/v1",
+            "model": "gpt-ready",
+            "api_key": "embedding-secret",
+            "timeout_seconds": 10,
+            "fallback_enabled": True,
+            "supports_embedding": True,
+            "embedding_model": "embed-model",
+            "embedding_dimensions": 3,
+        },
+    ).json()
+    ready = client.post(f"/api/settings/provider-profiles/{profile['id']}/test-embedding").json()
+    assert ready["embedding_status"] == "ready"
+    assert ready["embedding_last_checked_at"] is not None
+
+    updated = client.patch(
+        f"/api/settings/provider-profiles/{profile['id']}",
+        json={"timeout_seconds": 20},
+    )
+
+    assert updated.status_code == 200
+    payload = updated.json()
+    assert payload["timeout_seconds"] == 20
+    assert payload["embedding_status"] == "untested"
+    assert payload["embedding_last_error"] is None
+    assert payload["embedding_last_checked_at"] is None
