@@ -136,6 +136,13 @@ class AgentRepository:
         stmt = self._reranker_scope(select(RerankerProfile)).order_by(RerankerProfile.is_active.desc(), RerankerProfile.updated_at.desc(), RerankerProfile.id.desc())
         return list(self.db.scalars(stmt))
 
+    def active_reranker_profile(self) -> RerankerProfile | None:
+        stmt = self._reranker_scope(select(RerankerProfile).where(RerankerProfile.is_active.is_(True))).order_by(
+            RerankerProfile.updated_at.desc(),
+            RerankerProfile.id.desc(),
+        )
+        return self.db.scalars(stmt).first()
+
     def create_reranker_profile(self, data: RerankerProfileCreate) -> RerankerProfile:
         profile = RerankerProfile(
             user_id=self.user_id,

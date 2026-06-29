@@ -73,6 +73,20 @@ class ChunkRepository:
             )
         return list(self.db.scalars(stmt.order_by(SourceChunk.id.asc())))
 
+    def list_by_ids(self, chunk_ids: list[int]) -> list[SourceChunk]:
+        if not chunk_ids:
+            return []
+        stmt = select(SourceChunk).options(joinedload(SourceChunk.source)).join(Source).where(SourceChunk.id.in_(chunk_ids))
+        if self.user_id is not None:
+            stmt = stmt.where(Source.user_id == self.user_id, SourceChunk.user_id == self.user_id)
+        if self.knowledge_base_id is not None:
+            stmt = stmt.where(
+                Source.knowledge_base_id == self.knowledge_base_id,
+                SourceChunk.knowledge_base_id == self.knowledge_base_id,
+            )
+        rows = {chunk.id: chunk for chunk in self.db.scalars(stmt)}
+        return [rows[chunk_id] for chunk_id in chunk_ids if chunk_id in rows]
+
     def count_for_source(self, source_id: int) -> int:
         stmt = select(SourceChunk.id).join(Source).where(SourceChunk.source_id == source_id)
         if self.user_id is not None:

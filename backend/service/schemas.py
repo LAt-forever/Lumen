@@ -23,6 +23,8 @@ IngestionJobStatus = Literal["queued", "running", "succeeded", "failed", "cancel
 IngestionJobType = Literal["note", "upload", "link", "crawl", "bookmark", "index", "retry"]
 AgentToolName = Literal["global_search", "memory_search", "memory_graph"]
 ServiceHealthStatus = Literal["ok", "degraded", "unavailable", "not_configured"]
+RetrievalMode = Literal["local", "es_bm25", "es_vector", "es_hybrid"]
+RetrievalSource = Literal["elasticsearch", "local", "local_fallback"]
 
 
 class SourceCreate(BaseModel):
@@ -114,6 +116,8 @@ class ChunkRead(BaseModel):
     matched_terms: list[str] = Field(default_factory=list)
     matched_date: str | None = None
     match_reason: str = ""
+    retrieval_mode: RetrievalMode = "local"
+    retrieval_source: RetrievalSource = "local"
 
 
 class ChatRequest(BaseModel):
@@ -129,6 +133,8 @@ class CitationRead(BaseModel):
     matched_terms: list[str] = Field(default_factory=list)
     matched_date: str | None = None
     match_reason: str = ""
+    retrieval_mode: RetrievalMode = "local"
+    retrieval_source: RetrievalSource = "local"
 
 
 class UsedMemoryRead(BaseModel):
