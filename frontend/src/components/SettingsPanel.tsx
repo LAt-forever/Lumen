@@ -6,6 +6,7 @@ import {
   useCreateProviderProfile,
   useDeleteProviderProfile,
   useProviderProfiles,
+  useTestProviderProfileEmbedding,
   useRuntimeSettings,
   useTestProviderProfile,
   useUpdateProviderProfile,
@@ -21,6 +22,10 @@ type ProfileFormState = {
   timeout_seconds: string
   fallback_enabled: boolean
   is_active: boolean
+  supports_chat: boolean
+  supports_embedding: boolean
+  embedding_model: string
+  embedding_dimensions: string
   clear_api_key: boolean
 }
 
@@ -33,6 +38,10 @@ const emptyProfileForm: ProfileFormState = {
   timeout_seconds: '30',
   fallback_enabled: true,
   is_active: false,
+  supports_chat: true,
+  supports_embedding: false,
+  embedding_model: '',
+  embedding_dimensions: '',
   clear_api_key: false,
 }
 
@@ -49,6 +58,7 @@ export function SettingsPanel() {
   const updateProfile = useUpdateProviderProfile()
   const activateProfile = useActivateProviderProfile()
   const testProfile = useTestProviderProfile()
+  const testEmbeddingProfile = useTestProviderProfileEmbedding()
   const deleteProfile = useDeleteProviderProfile()
   const [editingProfileId, setEditingProfileId] = useState<number | null>(null)
   const [form, setForm] = useState<ProfileFormState>(emptyProfileForm)
@@ -68,6 +78,7 @@ export function SettingsPanel() {
     updateProfile.isPending ||
     activateProfile.isPending ||
     testProfile.isPending ||
+    testEmbeddingProfile.isPending ||
     deleteProfile.isPending
   const canSubmit =
     Boolean(form.name.trim()) && Boolean(form.base_url.trim()) && Boolean(form.model.trim()) && Number(form.timeout_seconds) > 0
@@ -92,6 +103,10 @@ export function SettingsPanel() {
       timeout_seconds: String(profile.timeout_seconds),
       fallback_enabled: profile.fallback_enabled,
       is_active: profile.is_active,
+      supports_chat: profile.supports_chat,
+      supports_embedding: profile.supports_embedding,
+      embedding_model: profile.embedding_model ?? '',
+      embedding_dimensions: profile.embedding_dimensions ? String(profile.embedding_dimensions) : '',
       clear_api_key: false,
     })
   }
@@ -108,6 +123,10 @@ export function SettingsPanel() {
       timeout_seconds: Number(form.timeout_seconds),
       fallback_enabled: form.fallback_enabled,
       is_active: form.is_active,
+      supports_chat: form.supports_chat,
+      supports_embedding: form.supports_embedding,
+      embedding_model: form.embedding_model.trim() || null,
+      embedding_dimensions: form.embedding_dimensions.trim() ? Number(form.embedding_dimensions) : null,
     }
     const apiKey = form.api_key.trim()
 
@@ -288,6 +307,47 @@ export function SettingsPanel() {
               <input checked={form.is_active} onChange={(event) => updateForm('is_active', event.target.checked)} type="checkbox" />
               保存后设为当前
             </label>
+            <label className="checkbox-row">
+              <input
+                checked={form.supports_chat}
+                onChange={(event) => updateForm('supports_chat', event.target.checked)}
+                type="checkbox"
+              />
+              支持聊天
+            </label>
+            <label className="checkbox-row">
+              <input
+                checked={form.supports_embedding}
+                onChange={(event) => updateForm('supports_embedding', event.target.checked)}
+                type="checkbox"
+              />
+              支持 embedding
+            </label>
+
+            <div className="inline-fields">
+              <div>
+                <label className="field-label" htmlFor="provider-profile-embedding-model">
+                  Embedding 模型
+                </label>
+                <input
+                  id="provider-profile-embedding-model"
+                  onChange={(event) => updateForm('embedding_model', event.target.value)}
+                  value={form.embedding_model}
+                />
+              </div>
+              <div>
+                <label className="field-label" htmlFor="provider-profile-embedding-dimensions">
+                  Embedding 维度
+                </label>
+                <input
+                  id="provider-profile-embedding-dimensions"
+                  min="1"
+                  onChange={(event) => updateForm('embedding_dimensions', event.target.value)}
+                  type="number"
+                  value={form.embedding_dimensions}
+                />
+              </div>
+            </div>
 
             <div className="action-row">
               <button disabled={isMutating || !canSubmit} type="submit">
@@ -317,6 +377,10 @@ export function SettingsPanel() {
               <p>{profile.model}</p>
               <p>{profile.base_url}</p>
               <p>密钥：{profile.api_key_configured ? '已保存' : '未保存'}</p>
+              <p>能力：{profile.supports_chat ? '聊天' : '无聊天'} · {profile.supports_embedding ? 'Embedding' : '无 embedding'}</p>
+              {profile.embedding_model ? <p>Embedding：{profile.embedding_model} · {profile.embedding_dimensions ?? '默认维度'}</p> : null}
+              <p>Embedding 状态：{profileStatusLabel(profile.embedding_status)}</p>
+              {profile.embedding_last_error ? <p>Embedding 错误：{profile.embedding_last_error}</p> : null}
               {profile.last_error ? <p>最近错误：{profile.last_error}</p> : null}
             </div>
             <div className="memory-actions">
@@ -325,6 +389,9 @@ export function SettingsPanel() {
               </button>
               <button className="secondary" disabled={isMutating} onClick={() => testProfile.mutate(profile.id)} type="button">
                 测试连接
+              </button>
+              <button className="secondary" disabled={isMutating} onClick={() => testEmbeddingProfile.mutate(profile.id)} type="button">
+                测试 embedding
               </button>
               {!profile.is_active ? (
                 <button disabled={isMutating} onClick={() => activateProfile.mutate(profile.id)} type="button">

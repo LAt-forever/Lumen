@@ -11,6 +11,9 @@ import type {
   GlobalSearchResultRead,
   IngestionBatchRead,
   IngestionJobRead,
+  KnowledgeBaseCreate,
+  KnowledgeBaseRead,
+  KnowledgeBaseUpdate,
   LLMProviderProfileCreate,
   LLMProviderProfileRead,
   LLMProviderProfileUpdate,
@@ -45,6 +48,22 @@ let unauthorizedHandler: (() => void) | undefined
 type ChatStreamHandlers = {
   onChunk?: (text: string) => void
 }
+
+type KnowledgeBaseScoped = {
+  knowledge_base_id?: number | null
+}
+
+type NoteIngestionPayload = { title: string; source_type: 'note'; content: string } & KnowledgeBaseScoped
+type UploadIngestionPayload = { files: File[] } & KnowledgeBaseScoped
+type LinkIngestionPayload = { url: string } & KnowledgeBaseScoped
+type CrawlIngestionPayload = {
+  url: string
+  max_depth: number
+  max_pages: number
+  same_domain_only: boolean
+} & KnowledgeBaseScoped
+type BookmarkIngestionPayload = { html_content: string } & KnowledgeBaseScoped
+type ChatPayload = { message: string; conversation_id?: number; knowledge_base_id?: number | null }
 
 export function getAccessToken() {
   return window.localStorage.getItem(ACCESS_TOKEN_KEY)
@@ -160,35 +179,54 @@ async function readChatStream(response: Response, handlers: ChatStreamHandlers):
 }
 
 export const api = {
-  listSources: () => request<SourceRead[]>('/api/sources'),
+  listKnowledgeBases: () => request<KnowledgeBaseRead[]>('/api/knowledge-bases'),
+  createKnowledgeBase: (payload: KnowledgeBaseCreate) =>
+    request<KnowledgeBaseRead>('/api/knowledge-bases', { method: 'POST', body: JSON.stringify(payload) }),
+  updateKnowledgeBase: (knowledgeBaseId: number, payload: KnowledgeBaseUpdate) =>
+    request<KnowledgeBaseRead>(`/api/knowledge-bases/${knowledgeBaseId}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  archiveKnowledgeBase: (knowledgeBaseId: number) =>
+    request<KnowledgeBaseRead>(`/api/knowledge-bases/${knowledgeBaseId}/archive`, { method: 'POST' }),
+  restoreKnowledgeBase: (knowledgeBaseId: number) =>
+    request<KnowledgeBaseRead>(`/api/knowledge-bases/${knowledgeBaseId}/restore`, { method: 'POST' }),
+  deleteKnowledgeBase: (knowledgeBaseId: number) => request<void>(`/api/knowledge-bases/${knowledgeBaseId}`, { method: 'DELETE' }),
+  listSources: (knowledgeBaseId?: number | null) => {
+    const search = new URLSearchParams()
+    if (knowledgeBaseId) search.set('knowledge_base_id', String(knowledgeBaseId))
+    const suffix = search.toString() ? `?${search.toString()}` : ''
+    return request<SourceRead[]>(`/api/sources${suffix}`)
+  },
   login: (payload: { email: string; password: string }) =>
     request<AuthTokenRead>('/api/auth/login', { method: 'POST', body: JSON.stringify(payload) }),
   me: () => request<UserRead>('/api/auth/me'),
   logout: () => request<{ status: string }>('/api/auth/logout', { method: 'POST' }),
   getSource: (sourceId: number) => request<SourceDetailRead>(`/api/sources/${sourceId}`),
-  createSource: (payload: { title: string; source_type: 'note'; content: string }) =>
+  createSource: (payload: NoteIngestionPayload) =>
     request<SourceRead>('/api/sources', { method: 'POST', body: JSON.stringify(payload) }),
-  createIngestionNote: (payload: { title: string; source_type: 'note'; content: string }) =>
+  createIngestionNote: (payload: NoteIngestionPayload) =>
     request<IngestionBatchRead>('/api/ingestion-jobs/notes', { method: 'POST', body: JSON.stringify(payload) }),
-  uploadIngestionSources: (files: File[]) => {
+  uploadIngestionSources: ({ files, knowledge_base_id }: UploadIngestionPayload) => {
     const body = new FormData()
     files.forEach((f) => body.append('files', f))
-    return request<IngestionBatchRead>('/api/ingestion-jobs/uploads', { method: 'POST', body })
+    const search = new URLSearchParams()
+    if (knowledge_base_id) search.set('knowledge_base_id', String(knowledge_base_id))
+    const suffix = search.toString() ? `?${search.toString()}` : ''
+    return request<IngestionBatchRead>(`/api/ingestion-jobs/uploads${suffix}`, { method: 'POST', body })
   },
-  crawlIngestionWeb: (payload: { url: string; max_depth: number; max_pages: number; same_domain_only: boolean }) =>
+  crawlIngestionWeb: (payload: CrawlIngestionPayload) =>
     request<IngestionBatchRead>('/api/ingestion-jobs/crawls', { method: 'POST', body: JSON.stringify(payload) }),
-  importIngestionBookmarks: (htmlContent: string) =>
+  importIngestionBookmarks: (payload: BookmarkIngestionPayload) =>
     request<IngestionBatchRead>('/api/ingestion-jobs/bookmarks', {
       method: 'POST',
-      body: JSON.stringify({ html_content: htmlContent }),
+      body: JSON.stringify(payload),
     }),
-  captureIngestionLink: (url: string) =>
-    request<IngestionBatchRead>('/api/ingestion-jobs/links', { method: 'POST', body: JSON.stringify({ url }) }),
-  listIngestionJobs: (params: { status?: string; batch_id?: string; limit?: number } = {}) => {
+  captureIngestionLink: (payload: LinkIngestionPayload) =>
+    request<IngestionBatchRead>('/api/ingestion-jobs/links', { method: 'POST', body: JSON.stringify(payload) }),
+  listIngestionJobs: (params: { status?: string; batch_id?: string; limit?: number; knowledge_base_id?: number | null } = {}) => {
     const search = new URLSearchParams()
     if (params.status) search.set('status', params.status)
     if (params.batch_id) search.set('batch_id', params.batch_id)
     if (params.limit) search.set('limit', String(params.limit))
+    if (params.knowledge_base_id) search.set('knowledge_base_id', String(params.knowledge_base_id))
     const suffix = search.toString() ? `?${search.toString()}` : ''
     return request<IngestionJobRead[]>(`/api/ingestion-jobs${suffix}`)
   },
@@ -213,24 +251,34 @@ export const api = {
   indexSource: (sourceId: number) => request<SourceRead>(`/api/sources/${sourceId}/index`, { method: 'POST' }),
   retrySource: (sourceId: number) => request<SourceDetailRead>(`/api/sources/${sourceId}/retry`, { method: 'POST' }),
   deleteSource: (sourceId: number) => request<void>(`/api/sources/${sourceId}`, { method: 'DELETE' }),
-  search: (query: string) => request<ChunkRead[]>(`/api/search?${new URLSearchParams({ q: query }).toString()}`),
-  globalSearch: (params: { q: string; types?: string; tag?: string; favorite?: boolean }) => {
+  search: (query: string, knowledgeBaseId?: number | null) => {
+    const search = new URLSearchParams({ q: query })
+    if (knowledgeBaseId) search.set('knowledge_base_id', String(knowledgeBaseId))
+    return request<ChunkRead[]>(`/api/search?${search.toString()}`)
+  },
+  globalSearch: (params: { q: string; types?: string; tag?: string; favorite?: boolean; knowledge_base_id?: number | null }) => {
     const search = new URLSearchParams({ q: params.q })
     if (params.types) search.set('types', params.types)
     if (params.tag) search.set('tag', params.tag)
     if (params.favorite) search.set('favorite', 'true')
+    if (params.knowledge_base_id) search.set('knowledge_base_id', String(params.knowledge_base_id))
     return request<GlobalSearchResultRead[]>(`/api/global-search?${search.toString()}`)
   },
-  ask: (message: string, conversationId?: number) =>
-    request<ChatResponse>('/api/chat', {
+  ask: (payloadOrMessage: string | ChatPayload, conversationId?: number, knowledgeBaseId?: number | null) => {
+    const payload =
+      typeof payloadOrMessage === 'string'
+        ? { message: payloadOrMessage, conversation_id: conversationId, knowledge_base_id: knowledgeBaseId }
+        : payloadOrMessage
+    return request<ChatResponse>('/api/chat', {
       method: 'POST',
-      body: JSON.stringify({ message, conversation_id: conversationId }),
-    }),
-  askStream: async (message: string, handlers: ChatStreamHandlers = {}, conversationId?: number) => {
+      body: JSON.stringify(payload),
+    })
+  },
+  askStream: async (message: string, handlers: ChatStreamHandlers = {}, conversationId?: number, knowledgeBaseId?: number | null) => {
     const response = await fetch(`${API_BASE}/api/chat/stream`, {
       headers: buildHeaders(false),
       method: 'POST',
-      body: JSON.stringify({ message, conversation_id: conversationId }),
+      body: JSON.stringify({ message, conversation_id: conversationId, knowledge_base_id: knowledgeBaseId }),
     })
     if (response.status === 401) {
       clearAccessToken()
@@ -288,6 +336,8 @@ export const api = {
     request<LLMProviderProfileRead>(`/api/settings/provider-profiles/${profileId}/activate`, { method: 'POST' }),
   testProviderProfile: (profileId: number) =>
     request<LLMProviderProfileRead>(`/api/settings/provider-profiles/${profileId}/test`, { method: 'POST' }),
+  testProviderProfileEmbedding: (profileId: number) =>
+    request<LLMProviderProfileRead>(`/api/settings/provider-profiles/${profileId}/test-embedding`, { method: 'POST' }),
   deleteProviderProfile: (profileId: number) =>
     request<void>(`/api/settings/provider-profiles/${profileId}`, { method: 'DELETE' }),
 

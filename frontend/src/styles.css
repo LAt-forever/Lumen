@@ -256,6 +256,64 @@ p {
   gap: 8px;
 }
 
+.top-workflow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.knowledge-base-selector {
+  width: min(100%, 300px);
+}
+
+.knowledge-base-selector .field-label {
+  margin-bottom: 4px;
+  font-size: 12px;
+}
+
+.knowledge-base-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 40px;
+  gap: 6px;
+}
+
+.knowledge-base-control select {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid #cbd6cf;
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  padding: 8px 10px;
+}
+
+.knowledge-base-control select:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgb(31 111 91 / 0.14);
+  outline: none;
+}
+
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--primary-strong);
+  cursor: pointer;
+}
+
+.icon-button:hover,
+.icon-button:focus-visible {
+  background: #edf3ee;
+  outline: none;
+}
+
 .system-state span,
 .mode-pill,
 .count-pill {
@@ -484,6 +542,33 @@ p {
 
 .settings-section {
   min-width: 0;
+}
+
+.knowledge-base-create {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.8fr) minmax(220px, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+  margin: 8px 0 18px;
+}
+
+.knowledge-base-create .action-row {
+  margin-top: 0;
+}
+
+.knowledge-base-lists {
+  align-items: start;
+}
+
+.knowledge-base-row h3,
+.knowledge-base-row p {
+  overflow-wrap: anywhere;
+}
+
+.knowledge-base-edit-grid {
+  display: grid;
+  grid-template-columns: minmax(160px, 0.8fr) minmax(180px, 1fr);
+  gap: 10px;
 }
 
 .full-width-section {
@@ -931,6 +1016,11 @@ p {
     flex-direction: column;
   }
 
+  .top-workflow {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
   .context-column {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -960,6 +1050,11 @@ p {
   }
 
   .search-filter-row {
+    grid-template-columns: 1fr;
+  }
+
+  .knowledge-base-create,
+  .knowledge-base-edit-grid {
     grid-template-columns: 1fr;
   }
 

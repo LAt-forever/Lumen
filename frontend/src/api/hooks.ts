@@ -14,6 +14,9 @@ import type {
   GlobalSearchResultRead,
   IngestionBatchRead,
   IngestionJobRead,
+  KnowledgeBaseCreate,
+  KnowledgeBaseRead,
+  KnowledgeBaseUpdate,
   LLMProviderProfileCreate,
   LLMProviderProfileRead,
   LLMProviderProfileUpdate,
@@ -37,8 +40,56 @@ import type {
   TargetType,
 } from './types'
 
-export function useSources() {
-  return useQuery<SourceRead[]>({ queryKey: ['sources'], queryFn: () => api.listSources() as Promise<SourceRead[]> })
+export function useKnowledgeBases() {
+  return useQuery<KnowledgeBaseRead[]>({
+    queryKey: ['knowledge-bases'],
+    queryFn: () => api.listKnowledgeBases(),
+  })
+}
+
+function useKnowledgeBaseMutation<TInput>(mutationFn: (input: TInput) => Promise<KnowledgeBaseRead | void>) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['knowledge-bases'] })
+      await queryClient.invalidateQueries({ queryKey: ['sources'] })
+      await queryClient.invalidateQueries({ queryKey: ['ingestion-jobs'] })
+      await queryClient.invalidateQueries({ queryKey: ['search'] })
+      await queryClient.invalidateQueries({ queryKey: ['global-search'] })
+      await queryClient.invalidateQueries({ queryKey: ['status'] })
+    },
+  })
+}
+
+export function useCreateKnowledgeBase() {
+  return useKnowledgeBaseMutation<KnowledgeBaseCreate>(api.createKnowledgeBase)
+}
+
+export function useUpdateKnowledgeBase() {
+  return useKnowledgeBaseMutation<{ knowledgeBaseId: number; payload: KnowledgeBaseUpdate }>(({ knowledgeBaseId, payload }) =>
+    api.updateKnowledgeBase(knowledgeBaseId, payload),
+  )
+}
+
+export function useArchiveKnowledgeBase() {
+  return useKnowledgeBaseMutation<number>(api.archiveKnowledgeBase)
+}
+
+export function useRestoreKnowledgeBase() {
+  return useKnowledgeBaseMutation<number>(api.restoreKnowledgeBase)
+}
+
+export function useDeleteKnowledgeBase() {
+  return useKnowledgeBaseMutation<number>(api.deleteKnowledgeBase)
+}
+
+export function useSources(knowledgeBaseId?: number | null) {
+  return useQuery<SourceRead[]>({
+    queryKey: ['sources', knowledgeBaseId ?? 'default'],
+    queryFn: () => api.listSources(knowledgeBaseId) as Promise<SourceRead[]>,
+    enabled: knowledgeBaseId !== null,
+  })
 }
 
 export function useSourceDetail(sourceId?: number) {
@@ -91,15 +142,17 @@ function useIngestionSubmitMutation<TInput>(mutationFn: (input: TInput) => Promi
 }
 
 export function useCreateIngestionNote() {
-  return useIngestionSubmitMutation<{ title: string; source_type: 'note'; content: string }>(api.createIngestionNote)
+  return useIngestionSubmitMutation<{ title: string; source_type: 'note'; content: string; knowledge_base_id?: number | null }>(
+    api.createIngestionNote,
+  )
 }
 
 export function useUploadIngestionSources() {
-  return useIngestionSubmitMutation<File[]>(api.uploadIngestionSources)
+  return useIngestionSubmitMutation<{ files: File[]; knowledge_base_id?: number | null }>(api.uploadIngestionSources)
 }
 
 export function useCaptureIngestionLink() {
-  return useIngestionSubmitMutation<string>(api.captureIngestionLink)
+  return useIngestionSubmitMutation<{ url: string; knowledge_base_id?: number | null }>(api.captureIngestionLink)
 }
 
 export function useCrawlIngestionWeb() {
@@ -108,17 +161,19 @@ export function useCrawlIngestionWeb() {
     max_depth: number
     max_pages: number
     same_domain_only: boolean
+    knowledge_base_id?: number | null
   }>(api.crawlIngestionWeb)
 }
 
 export function useImportIngestionBookmarks() {
-  return useIngestionSubmitMutation<string>(api.importIngestionBookmarks)
+  return useIngestionSubmitMutation<{ html_content: string; knowledge_base_id?: number | null }>(api.importIngestionBookmarks)
 }
 
-export function useIngestionJobs(limit = 20) {
+export function useIngestionJobs(limit = 20, knowledgeBaseId?: number | null) {
   return useQuery<IngestionJobRead[]>({
-    queryKey: ['ingestion-jobs', { limit }],
-    queryFn: () => api.listIngestionJobs({ limit }),
+    queryKey: ['ingestion-jobs', { limit, knowledgeBaseId: knowledgeBaseId ?? null }],
+    queryFn: () => api.listIngestionJobs({ limit, knowledge_base_id: knowledgeBaseId }),
+    enabled: typeof knowledgeBaseId === 'number',
     refetchInterval: (query) => ingestionJobsPollInterval(query.state.data as IngestionJobRead[] | undefined),
   })
 }
@@ -249,10 +304,10 @@ export function useDeleteSource() {
   })
 }
 
-export function useAskLumen() {
+export function useAskLumen(knowledgeBaseId?: number | null) {
   const queryClient = useQueryClient()
   return useMutation<ChatResponse, Error, string>({
-    mutationFn: (message) => api.ask(message) as Promise<ChatResponse>,
+    mutationFn: (message) => api.ask(message, undefined, knowledgeBaseId) as Promise<ChatResponse>,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['memories', 'pending'] })
       await queryClient.invalidateQueries({ queryKey: ['review'] })
@@ -260,10 +315,10 @@ export function useAskLumen() {
   })
 }
 
-export function useAskLumenStream() {
+export function useAskLumenStream(knowledgeBaseId?: number | null) {
   const queryClient = useQueryClient()
   return useMutation<ChatResponse, Error, { message: string; onChunk: (text: string) => void }>({
-    mutationFn: ({ message, onChunk }) => api.askStream(message, { onChunk }) as Promise<ChatResponse>,
+    mutationFn: ({ message, onChunk }) => api.askStream(message, { onChunk }, undefined, knowledgeBaseId) as Promise<ChatResponse>,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['memories', 'pending'] })
       await queryClient.invalidateQueries({ queryKey: ['review'] })
@@ -271,15 +326,15 @@ export function useAskLumenStream() {
   })
 }
 
-export function useSearch(query: string) {
+export function useSearch(query: string, knowledgeBaseId?: number | null) {
   return useQuery<ChunkRead[]>({
-    queryKey: ['search', query],
-    queryFn: () => api.search(query),
+    queryKey: ['search', query, knowledgeBaseId ?? 'default'],
+    queryFn: () => api.search(query, knowledgeBaseId),
     enabled: query.trim().length > 0,
   })
 }
 
-export function useGlobalSearch(params: { query: string; type: string; tag: string; favorite: boolean }) {
+export function useGlobalSearch(params: { query: string; type: string; tag: string; favorite: boolean; knowledgeBaseId?: number | null }) {
   const types = params.type === 'all' ? undefined : params.type === 'source' ? 'source,source_chunk' : params.type
   return useQuery<GlobalSearchResultRead[]>({
     queryKey: ['global-search', params],
@@ -289,6 +344,7 @@ export function useGlobalSearch(params: { query: string; type: string; tag: stri
         types,
         tag: params.tag || undefined,
         favorite: params.favorite,
+        knowledge_base_id: params.knowledgeBaseId,
       }),
     enabled: params.query.trim().length > 0,
   })
@@ -473,6 +529,10 @@ export function useActivateProviderProfile() {
 
 export function useTestProviderProfile() {
   return useProviderProfileMutation<number>(api.testProviderProfile)
+}
+
+export function useTestProviderProfileEmbedding() {
+  return useProviderProfileMutation<number>(api.testProviderProfileEmbedding)
 }
 
 export function useDeleteProviderProfile() {

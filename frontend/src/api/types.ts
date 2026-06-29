@@ -1,4 +1,7 @@
 export type SourceType = 'note' | 'text' | 'markdown' | 'pdf' | 'image' | 'docx' | 'epub' | 'link' | 'bookmark' | 'web_crawl'
+export type KnowledgeBaseStatus = 'active' | 'archived'
+export type RetrievalMode = 'local' | 'es_bm25' | 'es_vector' | 'es_hybrid'
+export type RetrievalSource = 'elasticsearch' | 'local' | 'local_fallback'
 
 export type UserRead = {
   id: number
@@ -13,8 +16,30 @@ export type AuthTokenRead = {
   user: UserRead
 }
 
+export type KnowledgeBaseRead = {
+  id: number
+  name: string
+  description: string | null
+  status: KnowledgeBaseStatus
+  is_default: boolean
+  created_at: string
+  updated_at: string
+}
+
+export type KnowledgeBaseCreate = {
+  name: string
+  description?: string | null
+}
+
+export type KnowledgeBaseUpdate = {
+  name?: string | null
+  description?: string | null
+}
+
 export type SourceRead = {
   id: number
+  knowledge_base_id: number | null
+  knowledge_base_name: string | null
   title: string
   source_type: SourceType
   status: string
@@ -42,6 +67,7 @@ export type IngestionJobType = 'note' | 'upload' | 'link' | 'crawl' | 'bookmark'
 export type IngestionJobRead = {
   id: number
   batch_id: string
+  knowledge_base_id: number | null
   source_id: number | null
   source_title: string | null
   job_type: IngestionJobType
@@ -80,7 +106,18 @@ export type ChatResponse = {
   conversation_id: number
   message_id: number
   answer: string
-  citations: Array<{ source_id: number; source_title: string; chunk_id: number; quote: string } & EvidenceMatch>
+  citations: Array<
+    {
+      source_id: number
+      source_title: string
+      chunk_id: number
+      quote: string
+      knowledge_base_id?: number | null
+      knowledge_base_name?: string | null
+      retrieval_mode?: RetrievalMode
+      retrieval_source?: RetrievalSource
+    } & EvidenceMatch
+  >
   memories: Array<{ id: number; text: string; memory_type: string }>
   confidence: string
   answer_mode: 'extractive' | 'llm'
@@ -111,6 +148,13 @@ export type LLMProviderProfileRead = {
   timeout_seconds: number
   fallback_enabled: boolean
   is_active: boolean
+  supports_chat: boolean
+  supports_embedding: boolean
+  embedding_model: string | null
+  embedding_dimensions: number | null
+  embedding_status: 'untested' | 'ready' | 'failed'
+  embedding_last_error: string | null
+  embedding_last_checked_at: string | null
   status: 'untested' | 'ready' | 'failed'
   last_error: string | null
   last_checked_at: string | null
@@ -127,6 +171,10 @@ export type LLMProviderProfileCreate = {
   timeout_seconds: number
   fallback_enabled: boolean
   is_active: boolean
+  supports_chat: boolean
+  supports_embedding: boolean
+  embedding_model?: string | null
+  embedding_dimensions?: number | null
 }
 
 export type LLMProviderProfileUpdate = Partial<LLMProviderProfileCreate> & {
@@ -137,8 +185,12 @@ export type ChunkRead = EvidenceMatch & {
   id: number
   source_id: number
   source_title: string
+  knowledge_base_id?: number | null
+  knowledge_base_name?: string | null
   text: string
   score: number
+  retrieval_mode?: RetrievalMode
+  retrieval_source?: RetrievalSource
 }
 
 export type TargetType = 'source' | 'memory' | 'message'
@@ -180,9 +232,13 @@ export type FavoriteRead = {
 export type GlobalSearchResultRead = EvidenceMatch & {
   result_type: 'source_chunk' | 'source' | 'memory' | 'message'
   target_id: number
+  knowledge_base_id?: number | null
+  knowledge_base_name?: string | null
   title: string
   snippet: string
   score: number
+  retrieval_mode?: RetrievalMode
+  retrieval_source?: RetrievalSource
   tags: TagRead[]
   is_favorite: boolean
   created_at: string

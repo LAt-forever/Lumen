@@ -2,6 +2,7 @@ import { FormEvent, useState } from 'react'
 
 import { useFavoriteTarget, useGlobalSearch, useTags, useUnfavoriteTarget } from '../api/hooks'
 import type { GlobalSearchResultRead, TargetType } from '../api/types'
+import { useKnowledgeBaseContext } from '../knowledgeBase/KnowledgeBaseContext'
 
 const resultTypeLabels: Record<GlobalSearchResultRead['result_type'], string> = {
   source_chunk: '资料片段',
@@ -16,8 +17,15 @@ export function SearchPanel() {
   const [typeFilter, setTypeFilter] = useState('all')
   const [tagFilter, setTagFilter] = useState('')
   const [favoriteOnly, setFavoriteOnly] = useState(false)
+  const { activeKnowledgeBase, activeKnowledgeBaseId } = useKnowledgeBaseContext()
   const { data: tags = [] } = useTags()
-  const { data: results = [] } = useGlobalSearch({ query, type: typeFilter, tag: tagFilter, favorite: favoriteOnly })
+  const { data: results = [] } = useGlobalSearch({
+    query,
+    type: typeFilter,
+    tag: tagFilter,
+    favorite: favoriteOnly,
+    knowledgeBaseId: activeKnowledgeBaseId,
+  })
   const favoriteTarget = useFavoriteTarget()
   const unfavoriteTarget = useUnfavoriteTarget()
 
@@ -42,6 +50,7 @@ export function SearchPanel() {
         <div>
           <p className="eyebrow">全局检索</p>
           <h2>全局搜索</h2>
+          {activeKnowledgeBase ? <p className="helper-text">{activeKnowledgeBase.name}</p> : null}
         </div>
         <span className="count-pill">{results.length}</span>
       </div>
@@ -115,6 +124,7 @@ export function SearchPanel() {
                 </div>
               ) : null}
               {result.match_reason ? <p>{result.match_reason}</p> : null}
+              {result.retrieval_mode ? <p>检索：{result.retrieval_mode}</p> : null}
               <p>相关度：{result.score.toFixed(2)}</p>
               {result.result_type !== 'source_chunk' ? (
                 <div className="memory-actions">
