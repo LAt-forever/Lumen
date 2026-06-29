@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 SourceStatus = Literal["pending", "parsing", "indexed", "failed"]
 SourceType = Literal["note", "markdown", "text", "pdf", "link", "image", "docx", "epub", "bookmark", "web_crawl"]
+KnowledgeBaseStatus = Literal["active", "archived"]
 MemoryCandidateStatus = Literal["pending", "confirmed", "ignored", "merged"]
 MemoryStatus = Literal["active", "edited", "forgotten", "merged"]
 MemoryType = Literal["preference", "fact", "project", "relationship", "goal", "event", "note"]
@@ -30,6 +31,29 @@ class SourceCreate(BaseModel):
     content: str | None = None
     url: str | None = None
     filename: str | None = None
+    knowledge_base_id: int | None = None
+
+
+class KnowledgeBaseCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=160)
+    description: str | None = None
+
+
+class KnowledgeBaseUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=160)
+    description: str | None = None
+
+
+class KnowledgeBaseRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    description: str | None
+    status: KnowledgeBaseStatus
+    is_default: bool
+    created_at: datetime
+    updated_at: datetime
 
 
 class UserRead(BaseModel):
@@ -65,6 +89,8 @@ class SourceRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    knowledge_base_id: int | None
+    knowledge_base_name: str | None = None
     title: str
     source_type: str
     status: str
