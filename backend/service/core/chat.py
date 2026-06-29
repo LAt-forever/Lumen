@@ -1,7 +1,7 @@
 import json
 from dataclasses import dataclass
+from typing import Protocol
 
-from service.core.knowledge import KnowledgeService
 from service.core.llm import (
     AnswerProvider,
     AnswerResult,
@@ -13,6 +13,10 @@ from service.core.llm import (
 from service.core.memory import MemoryService
 from service.repositories.conversations import ConversationRepository
 from service.schemas import ChatRequest, ChatResponse, ChunkRead, CitationRead, UsedMemoryRead
+
+
+class RetrievalInterface(Protocol):
+    def search(self, query: str, limit: int = 5, knowledge_base_id: int | None = None) -> list[ChunkRead]: ...
 
 
 @dataclass(frozen=True)
@@ -28,12 +32,12 @@ class ChatOrchestrator:
     def __init__(
         self,
         conversations: ConversationRepository,
-        knowledge: KnowledgeService,
+        retrieval: RetrievalInterface,
         memories: MemoryService,
         answer_provider: AnswerProvider | None = None,
     ):
         self.conversations = conversations
-        self.knowledge = knowledge
+        self.retrieval = retrieval
         self.memories = memories
         self.answer_provider = answer_provider or ExtractiveAnswerProvider()
 
@@ -96,7 +100,7 @@ class ChatOrchestrator:
         conversation = self.conversations.get_or_create(request.conversation_id, title)
         user_message = self.conversations.add_message(conversation.id, "user", request.message)
 
-        chunks = self.knowledge.search(request.message, limit=4)
+        chunks = self.retrieval.search(request.message, limit=4, knowledge_base_id=request.knowledge_base_id)
         memory_rows = self.memories.search(request.message, limit=4)
         evidence = EvidencePack(
             question=request.message,
@@ -129,6 +133,8 @@ class ChatOrchestrator:
                     matched_terms=chunk.matched_terms,
                     matched_date=chunk.matched_date,
                     match_reason=chunk.match_reason,
+                    retrieval_mode=chunk.retrieval_mode,
+                    retrieval_source=chunk.retrieval_source,
                 )
             )
 

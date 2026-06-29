@@ -16,12 +16,21 @@ from service.core.llm import (
     build_answer_provider,
 )
 from service.core.memory import MemoryService
+from service.core.retrieval import RetrievalService
 from service.db import Base
 from service.repositories.chunks import ChunkRepository
 from service.repositories.conversations import ConversationRepository
 from service.repositories.memories import MemoryRepository
 from service.repositories.sources import SourceRepository
 from service.schemas import ChatRequest, ChunkRead, SourceCreate
+
+
+class _TestRetrieval:
+    def __init__(self, retrieval: RetrievalService):
+        self.retrieval = retrieval
+
+    def search(self, query: str, limit: int = 5, knowledge_base_id: int | None = None):
+        return self.retrieval.search(query, limit=limit)
 
 
 def make_orchestrator():
@@ -32,7 +41,8 @@ def make_orchestrator():
     knowledge = KnowledgeService(sources, ChunkRepository(db))
     memories = MemoryService(MemoryRepository(db))
     conversations = ConversationRepository(db)
-    return db, sources, knowledge, memories, ChatOrchestrator(conversations, knowledge, memories)
+    retrieval = _TestRetrieval(RetrievalService(knowledge, knowledge.chunks))
+    return db, sources, knowledge, memories, ChatOrchestrator(conversations, retrieval, memories)
 
 
 @pytest.fixture()
@@ -572,3 +582,99 @@ def test_chat_stream_emits_chunk_and_final_events(client):
     assert "event: chunk" in text
     assert "event: final" in text
     assert "Streaming answers still cite evidence." in text
+
+
+def test_chat_api_uses_requested_knowledge_base_for_citations(client, monkeypatch):
+    monkeypatch.setenv("LUMEN_RETRIEVAL_BACKEND", "local")
+    from service.config import get_settings
+
+    get_settings.cache_clear()
+    first_kb = client.post("/api/knowledge-bases", json={"name": "Chat KB A"}).json()
+    second_kb = client.post("/api/knowledge-bases", json={"name": "Chat KB B"}).json()
+    first = client.post(
+        "/api/sources",
+        json={
+            "title": "Scoped Chat A",
+            "source_type": "note",
+            "content": "CometScopedChat alpha citation evidence.",
+            "knowledge_base_id": first_kb["id"],
+        },
+    ).json()
+    second = client.post(
+        "/api/sources",
+        json={
+            "title": "Scoped Chat B",
+            "source_type": "note",
+            "content": "CometScopedChat beta citation evidence.",
+            "knowledge_base_id": second_kb["id"],
+        },
+    ).json()
+    assert client.post(f"/api/sources/{first['id']}/index").status_code == 200
+    assert client.post(f"/api/sources/{second['id']}/index").status_code == 200
+
+    response = client.post(
+        "/api/chat",
+        json={"message": "What does CometScopedChat cite?", "knowledge_base_id": second_kb["id"]},
+    )
+
+    assert response.status_code == 200
+    citations = response.json()["citations"]
+    assert citations
+    assert {citation["source_id"] for citation in citations} == {second["id"]}
+    assert all(citation["retrieval_mode"] == "local" for citation in citations)
+    assert all(citation["retrieval_source"] == "local" for citation in citations)
+
+
+def test_chat_stream_uses_requested_knowledge_base_for_citations(client, monkeypatch):
+    monkeypatch.setenv("LUMEN_RETRIEVAL_BACKEND", "local")
+    from service.config import get_settings
+
+    get_settings.cache_clear()
+    first_kb = client.post("/api/knowledge-bases", json={"name": "Stream KB A"}).json()
+    second_kb = client.post("/api/knowledge-bases", json={"name": "Stream KB B"}).json()
+    first = client.post(
+        "/api/sources",
+        json={
+            "title": "Scoped Stream A",
+            "source_type": "note",
+            "content": "CometScopedStream alpha citation evidence.",
+            "knowledge_base_id": first_kb["id"],
+        },
+    ).json()
+    second = client.post(
+        "/api/sources",
+        json={
+            "title": "Scoped Stream B",
+            "source_type": "note",
+            "content": "CometScopedStream beta citation evidence.",
+            "knowledge_base_id": second_kb["id"],
+        },
+    ).json()
+    assert client.post(f"/api/sources/{first['id']}/index").status_code == 200
+    assert client.post(f"/api/sources/{second['id']}/index").status_code == 200
+
+    response = client.post(
+        "/api/chat/stream",
+        json={"message": "What does CometScopedStream cite?", "knowledge_base_id": second_kb["id"]},
+    )
+
+    assert response.status_code == 200
+    assert "Scoped Stream B" in response.text
+    assert "Scoped Stream A" not in response.text
+    assert '"retrieval_mode": "local"' in response.text
+    assert '"retrieval_source": "local"' in response.text
+
+
+def test_chat_api_uses_runtime_retrieval_backend(client, monkeypatch):
+    calls = []
+
+    def fake_search(self, query, limit=5, backend=None):
+        calls.append({"query": query, "limit": limit, "backend": backend})
+        return []
+
+    monkeypatch.setattr("service.api.chat.RetrievalService.search", fake_search)
+
+    response = client.post("/api/chat", json={"message": "runtime backend"})
+
+    assert response.status_code == 200
+    assert calls == [{"query": "runtime backend", "limit": 4, "backend": None}]

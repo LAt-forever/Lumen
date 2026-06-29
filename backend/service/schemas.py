@@ -123,6 +123,7 @@ class ChunkRead(BaseModel):
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1)
     conversation_id: int | None = None
+    knowledge_base_id: int | None = None
 
 
 class CitationRead(BaseModel):
@@ -297,6 +298,8 @@ class GlobalSearchResultRead(BaseModel):
     matched_terms: list[str] = Field(default_factory=list)
     matched_date: str | None = None
     match_reason: str
+    retrieval_mode: RetrievalMode = "local"
+    retrieval_source: RetrievalSource = "local"
     tags: list[TagRead] = Field(default_factory=list)
     is_favorite: bool = False
     created_at: datetime
