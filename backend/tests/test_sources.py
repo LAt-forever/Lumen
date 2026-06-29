@@ -63,6 +63,20 @@ def test_upload_text_file_can_be_indexed_and_searched(client):
     assert search_response.json()[0]["source_title"] == "notes.txt"
 
 
+def test_immediate_upload_can_target_knowledge_base(client):
+    kb = client.post("/api/knowledge-bases", json={"name": "Immediate Upload KB"}).json()
+
+    response = client.post(
+        f"/api/sources/upload?knowledge_base_id={kb['id']}",
+        files=[("files", ("scoped-notes.txt", b"Scoped immediate upload.", "text/plain"))],
+    )
+
+    assert response.status_code == 200
+    source = response.json()["sources"][0]
+    assert source["knowledge_base_id"] == kb["id"]
+    assert source["knowledge_base_name"] == "Immediate Upload KB"
+
+
 def test_source_detail_includes_chunk_count(client):
     source = client.post(
         "/api/sources",
@@ -139,6 +153,62 @@ def test_capture_link_extracts_html_text(client, monkeypatch):
 
     search_response = client.get("/api/search", params={"q": "link capture searchable"})
     assert search_response.json()[0]["source_title"] == "https://example.com/lumen"
+
+
+def test_immediate_link_crawl_and_bookmark_can_target_knowledge_base(client, monkeypatch):
+    from service.core.parsers.base import ParseResult
+    from service.core.parsers.web_parser import WebParser
+
+    async def fake_parse_link(self, source, **kwargs):
+        return ParseResult(text=f"Parsed {source.title}", title=source.title)
+
+    async def fake_parse_crawl(self, source, **kwargs):
+        return ParseResult(text=f"Crawled {source.title}", title=source.title)
+
+    monkeypatch.setattr(WebParser, "_parse_link", fake_parse_link)
+    monkeypatch.setattr(WebParser, "_parse_crawl", fake_parse_crawl)
+
+    kb = client.post("/api/knowledge-bases", json={"name": "Immediate Capture KB"}).json()
+    html = """
+    <!DOCTYPE NETSCAPE-Bookmark-file-1>
+    <DL><p>
+      <DT><A HREF="https://example.com/bookmark">Bookmark</A>
+    </DL><p>
+    """
+    cases = [
+        ("/api/sources/link", {"url": "https://example.com/link", "knowledge_base_id": kb["id"]}),
+        ("/api/sources/crawl", {"url": "https://example.com/crawl", "knowledge_base_id": kb["id"]}),
+        ("/api/sources/bookmarks", {"html_content": html, "knowledge_base_id": kb["id"]}),
+    ]
+
+    for url, body in cases:
+        response = client.post(url, json=body)
+        assert response.status_code == 200
+        payload = response.json()
+        source = payload["sources"][0] if "sources" in payload else payload
+        assert source["knowledge_base_id"] == kb["id"]
+        assert source["knowledge_base_name"] == "Immediate Capture KB"
+
+
+def test_direct_index_and_retry_reject_archived_knowledge_base(client):
+    kb = client.post("/api/knowledge-bases", json={"name": "Archived source operations KB"}).json()
+    source = client.post(
+        "/api/sources",
+        json={
+            "title": "Archived operation note",
+            "source_type": "note",
+            "content": "Archived operation content",
+            "knowledge_base_id": kb["id"],
+        },
+    ).json()
+    archived = client.post(f"/api/knowledge-bases/{kb['id']}/archive")
+    assert archived.status_code == 200
+
+    index_response = client.post(f"/api/sources/{source['id']}/index")
+    retry_response = client.post(f"/api/sources/{source['id']}/retry")
+
+    assert index_response.status_code == 400
+    assert retry_response.status_code == 400
 
 
 def test_capture_link_fetch_failure_creates_failed_source(client, monkeypatch):

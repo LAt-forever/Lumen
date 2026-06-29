@@ -2,10 +2,12 @@ from pathlib import Path
 
 from service.config import get_settings
 from service import db as dbmod
+from service.models import IngestionJob
 from service.repositories.chunks import ChunkRepository
 from service.repositories.ingestion_jobs import IngestionJobRepository
+from service.repositories.knowledge_bases import KnowledgeBaseRepository
 from service.repositories.sources import SourceRepository
-from service.schemas import SourceCreate
+from service.schemas import KnowledgeBaseCreate, SourceCreate
 
 
 def setup_database(tmp_path: Path, monkeypatch):
@@ -74,6 +76,40 @@ def test_worker_failure_marks_job_and_source_failed(tmp_path, monkeypatch):
         assert source_after.status == "failed"
         assert job_after.status == "failed"
         assert "No text content found" in job_after.error_message
+
+
+def test_worker_uses_job_knowledge_base_scope(tmp_path, monkeypatch):
+    setup_database(tmp_path, monkeypatch)
+    with dbmod.SessionLocal() as db:
+        knowledge_bases = KnowledgeBaseRepository(db)
+        source_kb = knowledge_bases.create(KnowledgeBaseCreate(name="Source KB"))
+        job_kb = knowledge_bases.create(KnowledgeBaseCreate(name="Job KB"))
+        sources = SourceRepository(db, knowledge_base_id=source_kb.id)
+        source = sources.create(SourceCreate(title="Mismatched scope", source_type="note", content="Mismatched content."))
+        job = IngestionJob(
+            knowledge_base_id=job_kb.id,
+            job_type="note",
+            batch_id="batch-worker-scope",
+            source_id=source.id,
+            payload_json=f'{{"source_id": {source.id}, "knowledge_base_id": {job_kb.id}}}',
+            progress_total=3,
+        )
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+        source_id = source.id
+        job_id = job.id
+
+    from service.worker import run_ingestion_job
+
+    run_ingestion_job(job_id)
+
+    with dbmod.SessionLocal() as db:
+        source_after = SourceRepository(db).get(source_id)
+        job_after = IngestionJobRepository(db).get(job_id)
+        assert source_after.status == "pending"
+        assert job_after.status == "failed"
+        assert "not found" in job_after.error_message
 
 
 def test_stale_running_jobs_are_failed_on_worker_recovery(tmp_path, monkeypatch):

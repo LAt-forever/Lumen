@@ -12,6 +12,7 @@ from service.core.ingestion import decode_text_upload, source_type_for_filename
 from service.core.storage import move_to_final, resolve_file_path, save_temp_upload
 from service.db import get_db
 from service.models import User
+from service.repositories.knowledge_bases import KnowledgeBaseRepository
 from service.repositories.ingestion_jobs import IngestionJobRepository
 from service.repositories.sources import SourceRepository
 from service.schemas import (
@@ -33,6 +34,7 @@ def _job_read(job) -> IngestionJobRead:
         id=job.id,
         batch_id=job.batch_id,
         source_id=job.source_id,
+        knowledge_base_id=job.knowledge_base_id,
         source_title=job.source.title if job.source else None,
         job_type=job.job_type,
         status=job.status,
@@ -45,6 +47,31 @@ def _job_read(job) -> IngestionJobRead:
         started_at=job.started_at,
         finished_at=job.finished_at,
     )
+
+
+def _raise_kb_http(exc: ValueError) -> None:
+    message = str(exc)
+    status_code = 404 if "not found" in message else 400
+    raise HTTPException(status_code=status_code, detail=message) from exc
+
+
+def _active_knowledge_base(db: Session, current_user: User, knowledge_base_id: int | None):
+    try:
+        return KnowledgeBaseRepository(db, current_user.id).require_active(knowledge_base_id)
+    except ValueError as exc:
+        _raise_kb_http(exc)
+
+
+def _source_repo(db: Session, user_id: int | None, knowledge_base_id: int | None) -> SourceRepository:
+    return SourceRepository(db, user_id=user_id, knowledge_base_id=knowledge_base_id)
+
+
+def _job_repo(db: Session, user_id: int | None, knowledge_base_id: int | None) -> IngestionJobRepository:
+    return IngestionJobRepository(db, user_id=user_id, knowledge_base_id=knowledge_base_id)
+
+
+def _payload(**values) -> str:
+    return json.dumps(values)
 
 
 def _batch_response(batch_id: str, jobs: list, sources: list) -> IngestionBatchRead:
@@ -65,9 +92,15 @@ def _batch_response(batch_id: str, jobs: list, sources: list) -> IngestionBatchR
     )
 
 
-def _enqueue_or_503(db: Session, job, source_id: int | None = None, user_id: int | None = None):
-    jobs = IngestionJobRepository(db, user_id=user_id)
-    sources = SourceRepository(db, user_id=user_id)
+def _enqueue_or_503(
+    db: Session,
+    job,
+    source_id: int | None = None,
+    user_id: int | None = None,
+    knowledge_base_id: int | None = None,
+):
+    jobs = _job_repo(db, user_id, knowledge_base_id)
+    sources = _source_repo(db, user_id, knowledge_base_id)
     try:
         result = process_ingestion_job.delay(job.id)
     except Exception as exc:
@@ -82,27 +115,34 @@ def _enqueue_or_503(db: Session, job, source_id: int | None = None, user_id: int
 def enqueue_note(data: SourceCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if data.source_type != "note":
         raise HTTPException(status_code=422, detail="Only note sources can be submitted here")
+    knowledge_base = _active_knowledge_base(db, current_user, data.knowledge_base_id)
     batch_id = str(uuid4())
-    sources = SourceRepository(db, user_id=current_user.id)
-    jobs = IngestionJobRepository(db, user_id=current_user.id)
-    source = sources.create(data)
+    sources = _source_repo(db, current_user.id, knowledge_base.id)
+    jobs = _job_repo(db, current_user.id, knowledge_base.id)
+    source = sources.create(data.model_copy(update={"knowledge_base_id": knowledge_base.id}))
     job = jobs.create(
         job_type="note",
         batch_id=batch_id,
         source_id=source.id,
-        payload_json=json.dumps({"source_id": source.id}),
+        payload_json=_payload(source_id=source.id, knowledge_base_id=knowledge_base.id),
         progress_total=3,
         message="已加入队列",
     )
-    job = _enqueue_or_503(db, job, source.id, current_user.id)
+    job = _enqueue_or_503(db, job, source.id, current_user.id, knowledge_base.id)
     return _batch_response(batch_id, [job], [source])
 
 
 @router.post("/uploads", response_model=IngestionBatchRead)
-async def enqueue_uploads(files: list[UploadFile] = File(), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def enqueue_uploads(
+    files: list[UploadFile] = File(),
+    knowledge_base_id: int | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    knowledge_base = _active_knowledge_base(db, current_user, knowledge_base_id)
     batch_id = str(uuid4())
-    sources = SourceRepository(db, user_id=current_user.id)
-    jobs = IngestionJobRepository(db, user_id=current_user.id)
+    sources = _source_repo(db, current_user.id, knowledge_base.id)
+    jobs = _job_repo(db, current_user.id, knowledge_base.id)
     created_jobs = []
     created_sources = []
 
@@ -110,13 +150,15 @@ async def enqueue_uploads(files: list[UploadFile] = File(), db: Session = Depend
         filename = file.filename or "Untitled file"
         source_type = source_type_for_filename(filename)
         if source_type is None:
-            source = sources.create(SourceCreate(title=filename, source_type="text", filename=filename))
+            source = sources.create(
+                SourceCreate(title=filename, source_type="text", filename=filename, knowledge_base_id=knowledge_base.id)
+            )
             sources.mark_failed(source.id, "Unsupported file type")
             job = jobs.create(
                 job_type="upload",
                 batch_id=batch_id,
                 source_id=source.id,
-                payload_json=json.dumps({"source_id": source.id, "filename": filename}),
+                payload_json=_payload(source_id=source.id, filename=filename, knowledge_base_id=knowledge_base.id),
                 progress_total=1,
                 message="不支持的文件类型",
             )
@@ -126,12 +168,25 @@ async def enqueue_uploads(files: list[UploadFile] = File(), db: Session = Depend
             if source_type in ("text", "markdown"):
                 content = decode_text_upload(file_data)
                 source = sources.create(
-                    SourceCreate(title=filename, source_type=source_type, filename=filename, content=content)
+                    SourceCreate(
+                        title=filename,
+                        source_type=source_type,
+                        filename=filename,
+                        content=content,
+                        knowledge_base_id=knowledge_base.id,
+                    )
                 )
             else:
                 temp_relative = save_temp_upload(file_data, filename)
                 try:
-                    source = sources.create(SourceCreate(title=filename, source_type=source_type, filename=temp_relative))
+                    source = sources.create(
+                        SourceCreate(
+                            title=filename,
+                            source_type=source_type,
+                            filename=temp_relative,
+                            knowledge_base_id=knowledge_base.id,
+                        )
+                    )
                     final_relative = move_to_final(temp_relative, source.id, filename)
                     temp_relative = ""
                     sources.update_filename(source.id, final_relative)
@@ -143,11 +198,11 @@ async def enqueue_uploads(files: list[UploadFile] = File(), db: Session = Depend
                 job_type="upload",
                 batch_id=batch_id,
                 source_id=source.id,
-                payload_json=json.dumps({"source_id": source.id, "filename": filename}),
+                payload_json=_payload(source_id=source.id, filename=filename, knowledge_base_id=knowledge_base.id),
                 progress_total=3,
                 message="已加入队列",
             )
-            job = _enqueue_or_503(db, job, source.id, current_user.id)
+            job = _enqueue_or_503(db, job, source.id, current_user.id, knowledge_base.id)
         refreshed = sources.get(source.id)
         created_sources.append(refreshed or source)
         created_jobs.append(job)
@@ -157,37 +212,43 @@ async def enqueue_uploads(files: list[UploadFile] = File(), db: Session = Depend
 
 @router.post("/links", response_model=IngestionBatchRead)
 def enqueue_link(data: LinkCapture, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    knowledge_base = _active_knowledge_base(db, current_user, data.knowledge_base_id)
     batch_id = str(uuid4())
-    sources = SourceRepository(db, user_id=current_user.id)
-    jobs = IngestionJobRepository(db, user_id=current_user.id)
-    source = sources.create(SourceCreate(title=data.url, source_type="link", url=data.url))
+    sources = _source_repo(db, current_user.id, knowledge_base.id)
+    jobs = _job_repo(db, current_user.id, knowledge_base.id)
+    source = sources.create(SourceCreate(title=data.url, source_type="link", url=data.url, knowledge_base_id=knowledge_base.id))
     job = jobs.create(
         job_type="link",
         batch_id=batch_id,
         source_id=source.id,
-        payload_json=json.dumps({"source_id": source.id, "url": data.url}),
+        payload_json=_payload(source_id=source.id, url=data.url, knowledge_base_id=knowledge_base.id),
         progress_total=3,
         message="已加入队列",
     )
-    job = _enqueue_or_503(db, job, source.id, current_user.id)
+    job = _enqueue_or_503(db, job, source.id, current_user.id, knowledge_base.id)
     return _batch_response(batch_id, [job], [source])
 
 
 @router.post("/crawls", response_model=IngestionBatchRead)
 def enqueue_crawl(data: WebCrawlRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    knowledge_base = _active_knowledge_base(db, current_user, data.knowledge_base_id)
     batch_id = str(uuid4())
-    sources = SourceRepository(db, user_id=current_user.id)
-    jobs = IngestionJobRepository(db, user_id=current_user.id)
-    source = sources.create(SourceCreate(title=data.url, source_type="web_crawl", url=data.url))
+    sources = _source_repo(db, current_user.id, knowledge_base.id)
+    jobs = _job_repo(db, current_user.id, knowledge_base.id)
+    source = sources.create(SourceCreate(title=data.url, source_type="web_crawl", url=data.url, knowledge_base_id=knowledge_base.id))
     job = jobs.create(
         job_type="crawl",
         batch_id=batch_id,
         source_id=source.id,
-        payload_json=json.dumps(data.model_dump()),
+        payload_json=_payload(
+            **data.model_dump(exclude={"knowledge_base_id"}),
+            source_id=source.id,
+            knowledge_base_id=knowledge_base.id,
+        ),
         progress_total=3,
         message="已加入队列",
     )
-    job = _enqueue_or_503(db, job, source.id, current_user.id)
+    job = _enqueue_or_503(db, job, source.id, current_user.id, knowledge_base.id)
     return _batch_response(batch_id, [job], [source])
 
 
@@ -206,22 +267,30 @@ def enqueue_bookmarks(data: BookmarkImportRequest, db: Session = Depends(get_db)
     if not bookmarks:
         raise HTTPException(status_code=400, detail="No bookmarks found in HTML content")
 
+    knowledge_base = _active_knowledge_base(db, current_user, data.knowledge_base_id)
     batch_id = str(uuid4())
-    sources = SourceRepository(db, user_id=current_user.id)
-    jobs = IngestionJobRepository(db, user_id=current_user.id)
+    sources = _source_repo(db, current_user.id, knowledge_base.id)
+    jobs = _job_repo(db, current_user.id, knowledge_base.id)
     created_jobs = []
     created_sources = []
     for bookmark in bookmarks:
-        source = sources.create(SourceCreate(title=bookmark["title"], source_type="bookmark", url=bookmark["url"]))
+        source = sources.create(
+            SourceCreate(
+                title=bookmark["title"],
+                source_type="bookmark",
+                url=bookmark["url"],
+                knowledge_base_id=knowledge_base.id,
+            )
+        )
         job = jobs.create(
             job_type="bookmark",
             batch_id=batch_id,
             source_id=source.id,
-            payload_json=json.dumps({"source_id": source.id, "url": bookmark["url"]}),
+            payload_json=_payload(source_id=source.id, url=bookmark["url"], knowledge_base_id=knowledge_base.id),
             progress_total=3,
             message="已加入队列",
         )
-        created_jobs.append(_enqueue_or_503(db, job, source.id, current_user.id))
+        created_jobs.append(_enqueue_or_503(db, job, source.id, current_user.id, knowledge_base.id))
         created_sources.append(source)
     return _batch_response(batch_id, created_jobs, created_sources)
 
@@ -232,17 +301,22 @@ def enqueue_source_index(source_id: int, db: Session = Depends(get_db), current_
     source = sources.get(source_id)
     if source is None:
         raise HTTPException(status_code=404, detail="Source not found")
+    knowledge_base = _active_knowledge_base(db, current_user, source.knowledge_base_id)
+    sources = _source_repo(db, current_user.id, knowledge_base.id)
+    source = sources.get(source_id)
+    if source is None:
+        raise HTTPException(status_code=404, detail="Source not found")
     batch_id = str(uuid4())
-    jobs = IngestionJobRepository(db, user_id=current_user.id)
+    jobs = _job_repo(db, current_user.id, knowledge_base.id)
     job = jobs.create(
         job_type="index",
         batch_id=batch_id,
         source_id=source.id,
-        payload_json=json.dumps({"source_id": source.id}),
+        payload_json=_payload(source_id=source.id, knowledge_base_id=knowledge_base.id),
         progress_total=3,
         message="已加入队列",
     )
-    job = _enqueue_or_503(db, job, source.id, current_user.id)
+    job = _enqueue_or_503(db, job, source.id, current_user.id, knowledge_base.id)
     return _batch_response(batch_id, [job], [source])
 
 
@@ -250,12 +324,17 @@ def enqueue_source_index(source_id: int, db: Session = Depends(get_db), current_
 def list_jobs(
     status: str | None = None,
     batch_id: str | None = None,
+    knowledge_base_id: int | None = None,
     limit: int = 50,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     bounded_limit = min(max(limit, 1), 100)
-    jobs = IngestionJobRepository(db, user_id=current_user.id).list_recent(status=status, batch_id=batch_id, limit=bounded_limit)
+    if knowledge_base_id is not None:
+        _active_knowledge_base(db, current_user, knowledge_base_id)
+    jobs = _job_repo(db, current_user.id, knowledge_base_id).list_recent(
+        status=status, batch_id=batch_id, limit=bounded_limit
+    )
     return [_job_read(job) for job in jobs]
 
 
@@ -299,8 +378,10 @@ def retry_job(job_id: int, db: Session = Depends(get_db), current_user: User = D
         raise HTTPException(status_code=404, detail="Ingestion job not found")
     if original.status not in ("failed", "canceled"):
         raise HTTPException(status_code=409, detail="Only failed or canceled jobs can be retried")
+    knowledge_base = _active_knowledge_base(db, current_user, original.knowledge_base_id)
+    retry_jobs = _job_repo(db, current_user.id, knowledge_base.id)
     batch_id = str(uuid4())
-    new_job = jobs.create(
+    new_job = retry_jobs.create(
         job_type=original.job_type,
         batch_id=batch_id,
         source_id=original.source_id,
@@ -308,6 +389,6 @@ def retry_job(job_id: int, db: Session = Depends(get_db), current_user: User = D
         progress_total=original.progress_total,
         message="已加入队列",
     )
-    new_job = _enqueue_or_503(db, new_job, original.source_id, current_user.id)
+    new_job = _enqueue_or_503(db, new_job, original.source_id, current_user.id, knowledge_base.id)
     sources = [new_job.source] if new_job.source is not None else []
     return _batch_response(batch_id, [new_job], sources)

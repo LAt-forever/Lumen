@@ -10,6 +10,7 @@ from service.core.ingestion import IngestionService, source_type_for_filename
 from service.db import get_db
 from service.models import Source, User
 from service.repositories.chunks import ChunkRepository
+from service.repositories.knowledge_bases import KnowledgeBaseRepository
 from service.repositories.sources import SourceRepository
 from service.schemas import (
     BookmarkImportRequest,
@@ -24,6 +25,31 @@ from service.schemas import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/sources", tags=["sources"])
+
+
+def _raise_kb_http(exc: ValueError) -> None:
+    message = str(exc)
+    status_code = 404 if "not found" in message else 400
+    raise HTTPException(status_code=status_code, detail=message) from exc
+
+
+def _active_knowledge_base(db: Session, current_user: User, knowledge_base_id: int | None):
+    try:
+        return KnowledgeBaseRepository(db, current_user.id).require_active(knowledge_base_id)
+    except ValueError as exc:
+        _raise_kb_http(exc)
+
+
+def _source_data_for_kb(data: SourceCreate, knowledge_base_id: int) -> SourceCreate:
+    return data.model_copy(update={"knowledge_base_id": knowledge_base_id})
+
+
+def _source_repo(db: Session, current_user: User, knowledge_base_id: int) -> SourceRepository:
+    return SourceRepository(db, user_id=current_user.id, knowledge_base_id=knowledge_base_id)
+
+
+def _chunk_repo(db: Session, current_user: User, knowledge_base_id: int) -> ChunkRepository:
+    return ChunkRepository(db, user_id=current_user.id, knowledge_base_id=knowledge_base_id)
 
 
 def _failed_source(sources: SourceRepository, data: SourceCreate, message: str):
@@ -46,7 +72,11 @@ def _source_detail(source, db: Session, user_id: int | None = None) -> SourceDet
             "filename": source.filename,
             "error_message": source.error_message,
             "created_at": source.created_at,
-            "chunk_count": ChunkRepository(db, user_id=user_id).count_for_source(source.id),
+            "knowledge_base_id": source.knowledge_base_id,
+            "knowledge_base_name": getattr(source, "knowledge_base_name", None),
+            "chunk_count": ChunkRepository(
+                db, user_id=user_id, knowledge_base_id=source.knowledge_base_id
+            ).count_for_source(source.id),
         }
     )
 
@@ -57,13 +87,20 @@ def _ingestion_service(db: Session, user_id: int | None = None) -> IngestionServ
 
 @router.post("", response_model=SourceRead)
 def create_source(data: SourceCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    return SourceRepository(db, user_id=current_user.id).create(data)
+    knowledge_base = _active_knowledge_base(db, current_user, data.knowledge_base_id)
+    return _source_repo(db, current_user, knowledge_base.id).create(_source_data_for_kb(data, knowledge_base.id))
 
 
 @router.post("/upload", response_model=BulkUploadResult)
-async def upload_source(files: list[UploadFile] = File(), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    sources = SourceRepository(db, user_id=current_user.id)
-    service = IngestionService(sources, ChunkRepository(db, user_id=current_user.id))
+async def upload_source(
+    files: list[UploadFile] = File(),
+    knowledge_base_id: int | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    knowledge_base = _active_knowledge_base(db, current_user, knowledge_base_id)
+    sources = _source_repo(db, current_user, knowledge_base.id)
+    service = IngestionService(sources, _chunk_repo(db, current_user, knowledge_base.id))
 
     result_sources: list[Source] = []
     succeeded = 0
@@ -107,10 +144,11 @@ async def upload_source(files: list[UploadFile] = File(), db: Session = Depends(
 
 @router.post("/crawl", response_model=SourceRead)
 async def crawl_source(data: WebCrawlRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    sources = SourceRepository(db, user_id=current_user.id)
-    source = sources.create(SourceCreate(title=data.url, source_type="web_crawl", url=data.url))
+    knowledge_base = _active_knowledge_base(db, current_user, data.knowledge_base_id)
+    sources = _source_repo(db, current_user, knowledge_base.id)
+    source = sources.create(SourceCreate(title=data.url, source_type="web_crawl", url=data.url, knowledge_base_id=knowledge_base.id))
     try:
-        service = IngestionService(sources, ChunkRepository(db, user_id=current_user.id))
+        service = IngestionService(sources, _chunk_repo(db, current_user, knowledge_base.id))
         await service.parse_crawl_source(source.id, data)
         service.index_existing_source(source.id)
     except Exception as exc:
@@ -123,10 +161,11 @@ async def crawl_source(data: WebCrawlRequest, db: Session = Depends(get_db), cur
 
 @router.post("/link", response_model=SourceRead)
 async def capture_link(data: LinkCapture, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    sources = SourceRepository(db, user_id=current_user.id)
-    source = sources.create(SourceCreate(title=data.url, source_type="link", url=data.url))
+    knowledge_base = _active_knowledge_base(db, current_user, data.knowledge_base_id)
+    sources = _source_repo(db, current_user, knowledge_base.id)
+    source = sources.create(SourceCreate(title=data.url, source_type="link", url=data.url, knowledge_base_id=knowledge_base.id))
     try:
-        service = IngestionService(sources, ChunkRepository(db, user_id=current_user.id))
+        service = IngestionService(sources, _chunk_repo(db, current_user, knowledge_base.id))
         await service.parse_link_source(source.id)
         service.index_existing_source(source.id)
     except Exception as exc:
@@ -138,8 +177,13 @@ async def capture_link(data: LinkCapture, db: Session = Depends(get_db), current
 
 
 @router.get("", response_model=list[SourceRead])
-def list_sources(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    return SourceRepository(db, user_id=current_user.id).list()
+def list_sources(
+    knowledge_base_id: int | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    knowledge_base = _active_knowledge_base(db, current_user, knowledge_base_id)
+    return _source_repo(db, current_user, knowledge_base.id).list()
 
 
 @router.get("/{source_id}", response_model=SourceDetailRead)
@@ -154,9 +198,12 @@ def get_source(source_id: int, db: Session = Depends(get_db), current_user: User
 @router.post("/{source_id}/index", response_model=SourceRead)
 def index_source(source_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     sources = SourceRepository(db, user_id=current_user.id)
-    if sources.get(source_id) is None:
+    existing = sources.get(source_id)
+    if existing is None:
         raise HTTPException(status_code=404, detail="Source not found")
-    service = IngestionService(sources, ChunkRepository(db, user_id=current_user.id))
+    knowledge_base = _active_knowledge_base(db, current_user, existing.knowledge_base_id)
+    sources = SourceRepository(db, user_id=current_user.id, knowledge_base_id=knowledge_base.id)
+    service = IngestionService(sources, ChunkRepository(db, user_id=current_user.id, knowledge_base_id=knowledge_base.id))
     service.index_existing_source(source_id)
     source = sources.get(source_id)
     if source is None:
@@ -170,13 +217,19 @@ async def retry_source(source_id: int, db: Session = Depends(get_db), current_us
     source = sources.get(source_id)
     if source is None:
         raise HTTPException(status_code=404, detail="Source not found")
+    knowledge_base = _active_knowledge_base(db, current_user, source.knowledge_base_id)
+    scoped_sources = SourceRepository(db, user_id=current_user.id, knowledge_base_id=knowledge_base.id)
 
     try:
-        service_source = await _ingestion_service(db, current_user.id).retry_source(source_id)
-        refreshed = sources.get(service_source.id)
+        service = IngestionService(
+            scoped_sources,
+            ChunkRepository(db, user_id=current_user.id, knowledge_base_id=knowledge_base.id),
+        )
+        service_source = await service.retry_source(source_id)
+        refreshed = scoped_sources.get(service_source.id)
     except Exception as exc:
-        sources.mark_failed(source.id, str(exc))
-        refreshed = sources.get(source.id)
+        scoped_sources.mark_failed(source.id, str(exc))
+        refreshed = scoped_sources.get(source.id)
     if refreshed is None:
         raise HTTPException(status_code=404, detail="Source not found")
     return _source_detail(refreshed, db, current_user.id)
@@ -194,7 +247,8 @@ def delete_source(source_id: int, db: Session = Depends(get_db), current_user: U
 
 @router.post("/bookmarks", response_model=BulkUploadResult)
 async def import_bookmarks(data: BookmarkImportRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    sources = SourceRepository(db, user_id=current_user.id)
+    knowledge_base = _active_knowledge_base(db, current_user, data.knowledge_base_id)
+    sources = _source_repo(db, current_user, knowledge_base.id)
     soup = BeautifulSoup(data.html_content, "html.parser")
     bookmarks = []
 
@@ -221,10 +275,11 @@ async def import_bookmarks(data: BookmarkImportRequest, db: Session = Depends(ge
                         title=bm["title"],
                         source_type="bookmark",
                         url=bm["url"],
+                        knowledge_base_id=knowledge_base.id,
                     )
                 )
-                await IngestionService(sources, ChunkRepository(db, user_id=current_user.id)).parse_bookmark_source(source.id)
-                IngestionService(sources, ChunkRepository(db, user_id=current_user.id)).index_existing_source(source.id)
+                await IngestionService(sources, _chunk_repo(db, current_user, knowledge_base.id)).parse_bookmark_source(source.id)
+                IngestionService(sources, _chunk_repo(db, current_user, knowledge_base.id)).index_existing_source(source.id)
                 return sources.get(source.id)
             except Exception:
                 logger.exception("Could not import bookmark %s", bm.get("url"))

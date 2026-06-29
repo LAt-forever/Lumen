@@ -83,6 +83,7 @@ class AuthTokenRead(BaseModel):
 
 class LinkCapture(BaseModel):
     url: str = Field(min_length=1, max_length=1000)
+    knowledge_base_id: int | None = None
 
 
 class SourceRead(BaseModel):
@@ -301,6 +302,7 @@ class IngestionJobRead(BaseModel):
     id: int
     batch_id: str
     source_id: int | None
+    knowledge_base_id: int | None
     source_title: str | None = None
     job_type: str
     status: str
@@ -554,7 +556,9 @@ class WebCrawlRequest(BaseModel):
     max_depth: int = Field(default=2, ge=1, le=3)
     max_pages: int = Field(default=10, ge=1, le=50)
     same_domain_only: bool = True
+    knowledge_base_id: int | None = None
 
 
 class BookmarkImportRequest(BaseModel):
     html_content: str = Field(min_length=1)
+    knowledge_base_id: int | None = None

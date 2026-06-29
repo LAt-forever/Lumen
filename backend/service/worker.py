@@ -82,9 +82,9 @@ def run_ingestion_job(job_id: int) -> None:
         if job is None:
             logger.warning("Ingestion job %s not found", job_id)
             return
-        jobs = IngestionJobRepository(db, user_id=job.user_id)
-        sources = SourceRepository(db, user_id=job.user_id)
-        chunks = ChunkRepository(db, user_id=job.user_id)
+        jobs = IngestionJobRepository(db, user_id=job.user_id, knowledge_base_id=job.knowledge_base_id)
+        sources = SourceRepository(db, user_id=job.user_id, knowledge_base_id=job.knowledge_base_id)
+        chunks = ChunkRepository(db, user_id=job.user_id, knowledge_base_id=job.knowledge_base_id)
         if job.status == "canceled":
             return
         if job.status not in ("queued", "running"):

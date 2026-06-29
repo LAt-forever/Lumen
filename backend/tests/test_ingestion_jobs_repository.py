@@ -5,8 +5,9 @@ from sqlalchemy.orm import sessionmaker
 
 from service.db import Base
 from service.repositories.ingestion_jobs import IngestionJobRepository
+from service.repositories.knowledge_bases import KnowledgeBaseRepository
 from service.repositories.sources import SourceRepository
-from service.schemas import SourceCreate
+from service.schemas import KnowledgeBaseCreate, SourceCreate
 
 
 def make_session():
@@ -98,3 +99,26 @@ def test_cancel_only_changes_queued_jobs():
     assert canceled.finished_at is not None
 
     assert jobs.cancel_queued(running.id) is None
+
+
+def test_create_rejects_source_outside_repository_knowledge_base_scope():
+    db = make_session()
+    knowledge_bases = KnowledgeBaseRepository(db)
+    source_kb = knowledge_bases.create(KnowledgeBaseCreate(name="Source KB"))
+    job_kb = knowledge_bases.create(KnowledgeBaseCreate(name="Job KB"))
+    source = SourceRepository(db, knowledge_base_id=source_kb.id).create(
+        SourceCreate(title="Scoped source", source_type="note", content="Source content")
+    )
+    jobs = IngestionJobRepository(db, knowledge_base_id=job_kb.id)
+
+    try:
+        jobs.create(
+            job_type="note",
+            batch_id="batch-bad-scope",
+            source_id=source.id,
+            payload_json=f'{{"source_id": {source.id}}}',
+        )
+    except ValueError as exc:
+        assert "not found" in str(exc)
+    else:
+        raise AssertionError("expected scoped repository to reject source outside knowledge base")
