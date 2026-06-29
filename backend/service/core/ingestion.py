@@ -12,6 +12,7 @@ from service.core.parsers import get_parser
 from service.core.storage import move_to_final, resolve_file_path, save_temp_upload
 from service.models import Source
 from service.repositories.chunks import ChunkRepository
+from service.repositories.indexing_runs import IndexingRunRepository
 from service.repositories.sources import SourceRepository
 from service.schemas import SourceCreate, WebCrawlRequest
 
@@ -78,10 +79,15 @@ def parse_payload(payload_json: str) -> dict[str, Any]:
 
 
 class IngestionService:
-    def __init__(self, sources: SourceRepository, chunks: ChunkRepository):
+    def __init__(
+        self,
+        sources: SourceRepository,
+        chunks: ChunkRepository,
+        indexing_runs: IndexingRunRepository | None = None,
+    ):
         self.sources = sources
         self.chunks = chunks
-        self.knowledge = KnowledgeService(sources, chunks)
+        self.knowledge = KnowledgeService(sources, chunks, indexing_runs=indexing_runs)
 
     async def create_and_index_upload(self, filename: str, file_data: bytes) -> Source:
         source_type = source_type_for_filename(filename)
@@ -149,8 +155,8 @@ class IngestionService:
             self.sources.update_content(source.id, fallback_content)
             return self._source(source.id)
 
-    def index_existing_source(self, source_id: int) -> Source:
-        self.knowledge.index_source(source_id)
+    def index_existing_source(self, source_id: int, job_id: int | None = None) -> Source:
+        self.knowledge.index_source(source_id, job_id=job_id)
         return self._source(source_id)
 
     async def retry_source(self, source_id: int) -> Source:

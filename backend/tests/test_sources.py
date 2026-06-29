@@ -2,6 +2,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from service.db import Base
+from service import db as dbmod
+from service.models import Source, SourceChunk
 from service.repositories.sources import SourceRepository
 from service.schemas import SourceCreate
 
@@ -90,6 +92,24 @@ def test_source_detail_includes_chunk_count(client):
     detail = response.json()
     assert detail["id"] == source["id"]
     assert detail["chunk_count"] >= 1
+
+
+def test_indexed_source_chunks_include_scope_and_indexing_metadata(client):
+    source = client.post(
+        "/api/sources",
+        json={"title": "Metadata source", "source_type": "note", "content": "Chunk metadata content."},
+    ).json()
+    client.post(f"/api/sources/{source['id']}/index")
+
+    with dbmod.SessionLocal() as db:
+        source_row = db.get(Source, source["id"])
+        chunk = db.query(SourceChunk).filter(SourceChunk.source_id == source["id"]).one()
+
+    assert chunk.user_id == source_row.user_id
+    assert chunk.knowledge_base_id == source_row.knowledge_base_id
+    assert chunk.content_hash
+    assert chunk.embedding_status in ("embedded", "skipped")
+    assert chunk.index_status in ("indexed", "skipped")
 
 
 def test_delete_source_removes_it_from_future_search(client):
