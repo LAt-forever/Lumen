@@ -2,7 +2,7 @@ import hashlib
 from datetime import UTC, datetime
 
 from sqlalchemy import delete, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from service.models import Citation, Source, SourceChunk
 
@@ -63,7 +63,7 @@ class ChunkRepository:
         return rows
 
     def list_all(self) -> list[SourceChunk]:
-        stmt = select(SourceChunk).join(Source)
+        stmt = select(SourceChunk).options(joinedload(SourceChunk.source)).join(Source)
         if self.user_id is not None:
             stmt = stmt.where(Source.user_id == self.user_id, SourceChunk.user_id == self.user_id)
         if self.knowledge_base_id is not None:
