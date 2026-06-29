@@ -18,11 +18,26 @@ class User(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
 
 
+class KnowledgeBase(Base):
+    __tablename__ = "knowledge_bases"
+    __table_args__ = (UniqueConstraint("user_id", "name", name="uq_knowledge_bases_user_name"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    name: Mapped[str] = mapped_column(String(160), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(40), default="active", nullable=False, index=True)
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
 class Source(Base):
     __tablename__ = "sources"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    knowledge_base_id: Mapped[Optional[int]] = mapped_column(ForeignKey("knowledge_bases.id"), nullable=True, index=True)
     title: Mapped[str] = mapped_column(String(300), nullable=False)
     source_type: Mapped[str] = mapped_column(String(40), nullable=False)
     url: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
@@ -42,10 +57,24 @@ class SourceChunk(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     source_id: Mapped[int] = mapped_column(ForeignKey("sources.id"), nullable=False, index=True)
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    knowledge_base_id: Mapped[Optional[int]] = mapped_column(ForeignKey("knowledge_bases.id"), nullable=True, index=True)
     chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
     text: Mapped[str] = mapped_column(Text, nullable=False)
     embedding_json: Mapped[str] = mapped_column(Text, nullable=False)
+    content_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
+    token_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    embedding_status: Mapped[str] = mapped_column(String(40), default="pending", nullable=False, index=True)
+    embedding_provider_profile_id: Mapped[Optional[int]] = mapped_column(ForeignKey("llm_provider_profiles.id"), nullable=True)
+    embedding_model: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    embedding_dimensions: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    embedding_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    embedded_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    index_status: Mapped[str] = mapped_column(String(40), default="pending", nullable=False, index=True)
+    index_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    indexed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
 
     source: Mapped[Source] = relationship(back_populates="chunks")
 
@@ -57,6 +86,7 @@ class IngestionJob(Base):
     user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
     batch_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
     source_id: Mapped[Optional[int]] = mapped_column(ForeignKey("sources.id"), nullable=True, index=True)
+    knowledge_base_id: Mapped[Optional[int]] = mapped_column(ForeignKey("knowledge_bases.id"), nullable=True, index=True)
     job_type: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
     status: Mapped[str] = mapped_column(String(40), default="queued", nullable=False, index=True)
     progress_current: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
@@ -71,6 +101,29 @@ class IngestionJob(Base):
     finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     source: Mapped[Optional[Source]] = relationship(back_populates="ingestion_jobs")
+
+
+class IndexingRun(Base):
+    __tablename__ = "indexing_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    knowledge_base_id: Mapped[Optional[int]] = mapped_column(ForeignKey("knowledge_bases.id"), nullable=True, index=True)
+    source_id: Mapped[Optional[int]] = mapped_column(ForeignKey("sources.id"), nullable=True, index=True)
+    job_id: Mapped[Optional[int]] = mapped_column(ForeignKey("ingestion_jobs.id"), nullable=True, index=True)
+    run_type: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(40), default="queued", nullable=False, index=True)
+    embedding_provider_profile_id: Mapped[Optional[int]] = mapped_column(ForeignKey("llm_provider_profiles.id"), nullable=True)
+    embedding_model: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    embedding_dimensions: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    chunks_total: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    chunks_embedded: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    chunks_indexed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
 
 
 class Conversation(Base):
@@ -223,6 +276,13 @@ class LLMProviderProfile(Base):
     timeout_seconds: Mapped[float] = mapped_column(Float, default=30.0, nullable=False)
     fallback_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    supports_chat: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    supports_embedding: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    embedding_model: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    embedding_dimensions: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    embedding_status: Mapped[str] = mapped_column(String(40), default="untested", nullable=False)
+    embedding_last_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    embedding_last_checked_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     status: Mapped[str] = mapped_column(String(40), default="untested", nullable=False)
     last_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     last_checked_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
