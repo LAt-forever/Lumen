@@ -1,11 +1,5 @@
-from fastapi.testclient import TestClient
-from service.main import app
-
-client = TestClient(app)
-
-
 class TestSourcesAPIExtended:
-    def test_upload_unsupported_file_type(self):
+    def test_upload_unsupported_file_type(self, client):
         response = client.post(
             "/api/sources/upload",
             files={"files": ("test.xyz", b"content", "application/octet-stream")},
@@ -14,14 +8,14 @@ class TestSourcesAPIExtended:
         data = response.json()
         assert data["failed"] >= 1
 
-    def test_crawl_invalid_url(self):
+    def test_crawl_invalid_url(self, client):
         response = client.post(
             "/api/sources/crawl",
             json={"url": "not-a-url", "max_depth": 1, "max_pages": 5},
         )
         assert response.status_code == 200
 
-    def test_bookmark_import_empty_html(self):
+    def test_bookmark_import_empty_html(self, client):
         response = client.post(
             "/api/sources/bookmarks",
             json={"html_content": "<html></html>"},

@@ -5,11 +5,28 @@ from service.models import Memory, MemoryCandidate, MemoryRelation
 
 
 class MemoryRepository:
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, user_id: int | None = None):
         self.db = db
+        self.user_id = user_id
+
+    def _candidate(self, candidate_id: int) -> MemoryCandidate | None:
+        if self.user_id is None:
+            return self.db.get(MemoryCandidate, candidate_id)
+        return self.db.scalar(select(MemoryCandidate).where(MemoryCandidate.id == candidate_id, MemoryCandidate.user_id == self.user_id))
+
+    def _memory(self, memory_id: int) -> Memory | None:
+        if self.user_id is None:
+            return self.db.get(Memory, memory_id)
+        return self.db.scalar(select(Memory).where(Memory.id == memory_id, Memory.user_id == self.user_id))
+
+    def _relation(self, relation_id: int) -> MemoryRelation | None:
+        if self.user_id is None:
+            return self.db.get(MemoryRelation, relation_id)
+        return self.db.scalar(select(MemoryRelation).where(MemoryRelation.id == relation_id, MemoryRelation.user_id == self.user_id))
 
     def create_candidate(self, text: str, memory_type: str, source_kind: str, source_ref: str, confidence: int) -> MemoryCandidate:
         candidate = MemoryCandidate(
+            user_id=self.user_id,
             text=text,
             memory_type=memory_type,
             source_kind=source_kind,
@@ -23,14 +40,17 @@ class MemoryRepository:
 
     def pending_candidates(self) -> list[MemoryCandidate]:
         stmt = select(MemoryCandidate).where(MemoryCandidate.status == "pending").order_by(MemoryCandidate.created_at.desc(), MemoryCandidate.id.desc())
+        if self.user_id is not None:
+            stmt = stmt.where(MemoryCandidate.user_id == self.user_id)
         return list(self.db.scalars(stmt))
 
     def confirm(self, candidate_id: int, text: str | None = None, memory_type: str | None = None) -> Memory:
-        candidate = self.db.get(MemoryCandidate, candidate_id)
+        candidate = self._candidate(candidate_id)
         if candidate is None:
             raise ValueError(f"candidate {candidate_id} not found")
         candidate.status = "confirmed"
         memory = Memory(
+            user_id=self.user_id,
             text=text or candidate.text,
             memory_type=memory_type or candidate.memory_type,
             provenance=f"{candidate.source_kind}:{candidate.source_ref}",
@@ -41,21 +61,23 @@ class MemoryRepository:
         return memory
 
     def ignore(self, candidate_id: int) -> None:
-        candidate = self.db.get(MemoryCandidate, candidate_id)
+        candidate = self._candidate(candidate_id)
         if candidate is None:
             raise ValueError(f"candidate {candidate_id} not found")
         candidate.status = "ignored"
         self.db.commit()
 
     def get(self, memory_id: int) -> Memory | None:
-        return self.db.get(Memory, memory_id)
+        return self._memory(memory_id)
 
     def exists_active(self, memory_id: int) -> bool:
-        memory = self.db.get(Memory, memory_id)
+        memory = self._memory(memory_id)
         return memory is not None and memory.status in ["active", "edited"]
 
     def active_memories(self) -> list[Memory]:
         stmt = select(Memory).where(Memory.status.in_(["active", "edited"])).order_by(Memory.updated_at.desc(), Memory.id.desc())
+        if self.user_id is not None:
+            stmt = stmt.where(Memory.user_id == self.user_id)
         return list(self.db.scalars(stmt))
 
     def create_relation(
@@ -68,14 +90,15 @@ class MemoryRepository:
     ) -> MemoryRelation:
         if source_memory_id == target_memory_id:
             raise ValueError("source and target memories must be different")
-        source = self.db.get(Memory, source_memory_id)
-        target = self.db.get(Memory, target_memory_id)
+        source = self._memory(source_memory_id)
+        target = self._memory(target_memory_id)
         if source is None or target is None:
             raise ValueError("memory not found")
         if source.status not in ["active", "edited"] or target.status not in ["active", "edited"]:
             raise ValueError("both memories must be active or edited")
         existing = self.db.scalar(
             select(MemoryRelation).where(
+                MemoryRelation.user_id == self.user_id if self.user_id is not None else True,
                 MemoryRelation.source_memory_id == source_memory_id,
                 MemoryRelation.target_memory_id == target_memory_id,
                 MemoryRelation.relation_type == relation_type,
@@ -84,6 +107,7 @@ class MemoryRepository:
         if existing is not None:
             raise ValueError("relation already exists")
         relation = MemoryRelation(
+            user_id=self.user_id,
             source_memory_id=source_memory_id,
             target_memory_id=target_memory_id,
             relation_type=relation_type,
@@ -96,7 +120,7 @@ class MemoryRepository:
         return relation
 
     def get_relation(self, relation_id: int) -> MemoryRelation | None:
-        return self.db.get(MemoryRelation, relation_id)
+        return self._relation(relation_id)
 
     def list_relations_for_memory(self, memory_id: int) -> list[MemoryRelation]:
         stmt = (
@@ -107,10 +131,14 @@ class MemoryRepository:
             )
             .order_by(MemoryRelation.created_at.desc(), MemoryRelation.id.desc())
         )
+        if self.user_id is not None:
+            stmt = stmt.where(MemoryRelation.user_id == self.user_id)
         return list(self.db.scalars(stmt))
 
     def list_active_relations(self) -> list[MemoryRelation]:
         stmt = select(MemoryRelation).where(MemoryRelation.status == "active").order_by(MemoryRelation.id.asc())
+        if self.user_id is not None:
+            stmt = stmt.where(MemoryRelation.user_id == self.user_id)
         return list(self.db.scalars(stmt))
 
     def top_memories_by_relation_count(self, limit: int) -> list[Memory]:
@@ -136,6 +164,8 @@ class MemoryRepository:
             .order_by(counts.c.deg.desc(), Memory.id.asc())
             .limit(limit)
         )
+        if self.user_id is not None:
+            stmt = stmt.where(Memory.user_id == self.user_id)
         return list(self.db.scalars(stmt).all())
 
     def recent_active_memories(self, limit: int) -> list[Memory]:
@@ -146,10 +176,12 @@ class MemoryRepository:
             .order_by(Memory.created_at.desc(), Memory.id.desc())
             .limit(limit)
         )
+        if self.user_id is not None:
+            stmt = stmt.where(Memory.user_id == self.user_id)
         return list(self.db.scalars(stmt).all())
 
     def forget_relation(self, relation_id: int) -> MemoryRelation:
-        relation = self.db.get(MemoryRelation, relation_id)
+        relation = self._relation(relation_id)
         if relation is None:
             raise ValueError(f"relation {relation_id} not found")
         relation.status = "forgotten"
@@ -159,10 +191,12 @@ class MemoryRepository:
 
     def list_active_for_search(self) -> list[Memory]:
         stmt = select(Memory).where(Memory.status.in_(["active", "edited"])).order_by(Memory.id.asc())
+        if self.user_id is not None:
+            stmt = stmt.where(Memory.user_id == self.user_id)
         return list(self.db.scalars(stmt))
 
     def update(self, memory_id: int, text: str, memory_type: str) -> Memory:
-        memory = self.db.get(Memory, memory_id)
+        memory = self._memory(memory_id)
         if memory is None:
             raise ValueError(f"memory {memory_id} not found")
         memory.text = text
@@ -173,7 +207,7 @@ class MemoryRepository:
         return memory
 
     def forget(self, memory_id: int) -> Memory:
-        memory = self.db.get(Memory, memory_id)
+        memory = self._memory(memory_id)
         if memory is None:
             raise ValueError(f"memory {memory_id} not found")
         memory.status = "forgotten"
@@ -184,8 +218,8 @@ class MemoryRepository:
     def merge(self, source_memory_id: int, target_memory_id: int) -> Memory:
         if source_memory_id == target_memory_id:
             raise ValueError("source and target memories must be different")
-        source = self.db.get(Memory, source_memory_id)
-        target = self.db.get(Memory, target_memory_id)
+        source = self._memory(source_memory_id)
+        target = self._memory(target_memory_id)
         if source is None:
             raise ValueError(f"memory {source_memory_id} not found")
         if target is None:
@@ -197,6 +231,7 @@ class MemoryRepository:
         target.status = "edited"
         source.status = "merged"
         merged_relation = MemoryRelation(
+            user_id=self.user_id,
             source_memory_id=source_memory_id,
             target_memory_id=target_memory_id,
             relation_type="merged_into",

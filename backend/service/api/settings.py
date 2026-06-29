@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
+from service.auth import get_current_user
 from service.config import Settings, get_settings
 from service.core.security import decrypt_secret, redact_text
 from service.core.llm import ChatCompletionError, HttpxChatCompletionClient, resolve_runtime_llm_config
 from service.db import get_db
-from service.models import LLMProviderProfile
+from service.models import LLMProviderProfile, User
 from service.repositories.provider_profiles import ProviderProfileRepository
 from service.schemas import (
     LLMProviderProfileCreate,
@@ -21,8 +22,9 @@ router = APIRouter(prefix="/api/settings", tags=["settings"])
 def runtime_settings(
     settings: Settings = Depends(get_settings),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> RuntimeSettingsRead:
-    runtime_config = resolve_runtime_llm_config(settings, ProviderProfileRepository(db).active())
+    runtime_config = resolve_runtime_llm_config(settings, ProviderProfileRepository(db, user_id=current_user.id).active())
     llm_configured = bool(runtime_config.api_key and runtime_config.model)
     configuration_hint = None
     if runtime_config.mode == "llm" and not llm_configured:
@@ -43,8 +45,8 @@ def runtime_settings(
 
 
 @router.get("/provider-profiles", response_model=list[LLMProviderProfileRead])
-def list_provider_profiles(db: Session = Depends(get_db)) -> list[LLMProviderProfileRead]:
-    profiles = ProviderProfileRepository(db).list()
+def list_provider_profiles(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)) -> list[LLMProviderProfileRead]:
+    profiles = ProviderProfileRepository(db, user_id=current_user.id).list()
     return [_read_profile(profile) for profile in profiles]
 
 
@@ -52,8 +54,9 @@ def list_provider_profiles(db: Session = Depends(get_db)) -> list[LLMProviderPro
 def create_provider_profile(
     data: LLMProviderProfileCreate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> LLMProviderProfileRead:
-    profile = ProviderProfileRepository(db).create(data)
+    profile = ProviderProfileRepository(db, user_id=current_user.id).create(data)
     return _read_profile(profile)
 
 
@@ -62,8 +65,9 @@ def update_provider_profile(
     profile_id: int,
     data: LLMProviderProfileUpdate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> LLMProviderProfileRead:
-    repo = ProviderProfileRepository(db)
+    repo = ProviderProfileRepository(db, user_id=current_user.id)
     try:
         profile = repo.update(profile_id, data)
     except ValueError as exc:
@@ -75,8 +79,9 @@ def update_provider_profile(
 def activate_provider_profile(
     profile_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> LLMProviderProfileRead:
-    repo = ProviderProfileRepository(db)
+    repo = ProviderProfileRepository(db, user_id=current_user.id)
     try:
         profile = repo.activate(profile_id)
     except ValueError as exc:
@@ -88,8 +93,9 @@ def activate_provider_profile(
 def test_provider_profile(
     profile_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> LLMProviderProfileRead:
-    repo = ProviderProfileRepository(db)
+    repo = ProviderProfileRepository(db, user_id=current_user.id)
     profile = repo.get(profile_id)
     if profile is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"provider profile {profile_id} not found")
@@ -106,8 +112,9 @@ def test_provider_profile(
 def delete_provider_profile(
     profile_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> Response:
-    repo = ProviderProfileRepository(db)
+    repo = ProviderProfileRepository(db, user_id=current_user.id)
     profile = repo.get(profile_id)
     if profile is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"provider profile {profile_id} not found")

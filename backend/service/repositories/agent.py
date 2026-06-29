@@ -13,11 +13,27 @@ DEFAULT_AGENT_TOOLS = ["global_search", "memory_search"]
 
 
 class AgentRepository:
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, user_id: int | None = None):
         self.db = db
+        self.user_id = user_id
+
+    def _agent_scope(self, stmt):
+        if self.user_id is not None:
+            return stmt.where(AgentProfile.user_id == self.user_id)
+        return stmt
+
+    def _log_scope(self, stmt):
+        if self.user_id is not None:
+            return stmt.where(AgentToolLog.user_id == self.user_id)
+        return stmt
+
+    def _reranker_scope(self, stmt):
+        if self.user_id is not None:
+            return stmt.where(RerankerProfile.user_id == self.user_id)
+        return stmt
 
     def list_profiles(self) -> list[AgentProfile]:
-        stmt = select(AgentProfile).order_by(AgentProfile.is_active.desc(), AgentProfile.updated_at.desc(), AgentProfile.id.desc())
+        stmt = self._agent_scope(select(AgentProfile)).order_by(AgentProfile.is_active.desc(), AgentProfile.updated_at.desc(), AgentProfile.id.desc())
         return list(self.db.scalars(stmt))
 
     def active_or_default(self) -> AgentProfile:
@@ -35,14 +51,17 @@ class AgentRepository:
         )
 
     def active_profile(self) -> AgentProfile | None:
-        stmt = select(AgentProfile).where(AgentProfile.is_active.is_(True)).order_by(AgentProfile.updated_at.desc(), AgentProfile.id.desc())
+        stmt = self._agent_scope(select(AgentProfile).where(AgentProfile.is_active.is_(True))).order_by(AgentProfile.updated_at.desc(), AgentProfile.id.desc())
         return self.db.scalars(stmt).first()
 
     def get_profile(self, profile_id: int) -> AgentProfile | None:
-        return self.db.get(AgentProfile, profile_id)
+        if self.user_id is None:
+            return self.db.get(AgentProfile, profile_id)
+        return self.db.scalar(select(AgentProfile).where(AgentProfile.id == profile_id, AgentProfile.user_id == self.user_id))
 
     def create_profile(self, data: AgentProfileCreate) -> AgentProfile:
         profile = AgentProfile(
+            user_id=self.user_id,
             name=data.name,
             instructions=data.instructions,
             enabled_tools_json=json.dumps(data.enabled_tools, ensure_ascii=False),
@@ -95,6 +114,7 @@ class AgentRepository:
         error_message: str | None = None,
     ) -> AgentToolLog:
         log = AgentToolLog(
+            user_id=self.user_id,
             profile_id=profile_id,
             tool_name=tool_name,
             action=action,
@@ -109,15 +129,16 @@ class AgentRepository:
         return log
 
     def list_tool_logs(self, limit: int = 50) -> list[AgentToolLog]:
-        stmt = select(AgentToolLog).order_by(AgentToolLog.created_at.desc(), AgentToolLog.id.desc()).limit(limit)
+        stmt = self._log_scope(select(AgentToolLog)).order_by(AgentToolLog.created_at.desc(), AgentToolLog.id.desc()).limit(limit)
         return list(self.db.scalars(stmt))
 
     def list_reranker_profiles(self) -> list[RerankerProfile]:
-        stmt = select(RerankerProfile).order_by(RerankerProfile.is_active.desc(), RerankerProfile.updated_at.desc(), RerankerProfile.id.desc())
+        stmt = self._reranker_scope(select(RerankerProfile)).order_by(RerankerProfile.is_active.desc(), RerankerProfile.updated_at.desc(), RerankerProfile.id.desc())
         return list(self.db.scalars(stmt))
 
     def create_reranker_profile(self, data: RerankerProfileCreate) -> RerankerProfile:
         profile = RerankerProfile(
+            user_id=self.user_id,
             name=data.name,
             provider=data.provider,
             base_url=data.base_url,
@@ -159,25 +180,28 @@ class AgentRepository:
         return profile
 
     def _deactivate_agent_profiles(self, except_id: int | None = None) -> None:
-        for profile in self.db.scalars(select(AgentProfile).where(AgentProfile.is_active.is_(True))):
+        for profile in self.db.scalars(self._agent_scope(select(AgentProfile).where(AgentProfile.is_active.is_(True)))):
             if except_id is not None and profile.id == except_id:
                 continue
             profile.is_active = False
 
     def _deactivate_reranker_profiles(self, except_id: int | None = None) -> None:
-        for profile in self.db.scalars(select(RerankerProfile).where(RerankerProfile.is_active.is_(True))):
+        for profile in self.db.scalars(self._reranker_scope(select(RerankerProfile).where(RerankerProfile.is_active.is_(True)))):
             if except_id is not None and profile.id == except_id:
                 continue
             profile.is_active = False
 
     def _required_profile(self, profile_id: int) -> AgentProfile:
-        profile = self.db.get(AgentProfile, profile_id)
+        profile = self.get_profile(profile_id)
         if profile is None:
             raise ValueError(f"agent profile {profile_id} not found")
         return profile
 
     def _required_reranker_profile(self, profile_id: int) -> RerankerProfile:
-        profile = self.db.get(RerankerProfile, profile_id)
+        if self.user_id is None:
+            profile = self.db.get(RerankerProfile, profile_id)
+        else:
+            profile = self.db.scalar(select(RerankerProfile).where(RerankerProfile.id == profile_id, RerankerProfile.user_id == self.user_id))
         if profile is None:
             raise ValueError(f"reranker profile {profile_id} not found")
         return profile

@@ -1,5 +1,18 @@
 export type SourceType = 'note' | 'text' | 'markdown' | 'pdf' | 'image' | 'docx' | 'epub' | 'link' | 'bookmark' | 'web_crawl'
 
+export type UserRead = {
+  id: number
+  email: string
+  is_admin: boolean
+  created_at: string
+}
+
+export type AuthTokenRead = {
+  access_token: string
+  token_type: 'bearer'
+  user: UserRead
+}
+
 export type SourceRead = {
   id: number
   title: string

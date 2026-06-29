@@ -15,8 +15,9 @@ def _utcnow() -> datetime:
 
 
 class IngestionJobRepository:
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, user_id: int | None = None):
         self.db = db
+        self.user_id = user_id
 
     def create(
         self,
@@ -28,6 +29,7 @@ class IngestionJobRepository:
         message: str | None = None,
     ) -> IngestionJob:
         job = IngestionJob(
+            user_id=self.user_id,
             job_type=job_type,
             batch_id=batch_id,
             source_id=source_id,
@@ -42,10 +44,14 @@ class IngestionJobRepository:
 
     def get(self, job_id: int) -> IngestionJob | None:
         stmt = select(IngestionJob).options(selectinload(IngestionJob.source)).where(IngestionJob.id == job_id)
+        if self.user_id is not None:
+            stmt = stmt.where(IngestionJob.user_id == self.user_id)
         return self.db.scalars(stmt).first()
 
     def list_recent(self, status: str | None = None, batch_id: str | None = None, limit: int = 50) -> list[IngestionJob]:
         stmt = select(IngestionJob).options(selectinload(IngestionJob.source))
+        if self.user_id is not None:
+            stmt = stmt.where(IngestionJob.user_id == self.user_id)
         if status:
             stmt = stmt.where(IngestionJob.status == status)
         if batch_id:
@@ -60,6 +66,8 @@ class IngestionJobRepository:
             .where(IngestionJob.batch_id == batch_id)
             .order_by(IngestionJob.id.asc())
         )
+        if self.user_id is not None:
+            stmt = stmt.where(IngestionJob.user_id == self.user_id)
         return list(self.db.scalars(stmt))
 
     def mark_queued(self, job_id: int, celery_task_id: str) -> IngestionJob:
@@ -124,12 +132,18 @@ class IngestionJobRepository:
         return job
 
     def stale_running_jobs(self) -> list[IngestionJob]:
-        stmt = select(IngestionJob).where(IngestionJob.status == "running").order_by(IngestionJob.id.asc())
+        stmt = select(IngestionJob).where(IngestionJob.status == "running")
+        if self.user_id is not None:
+            stmt = stmt.where(IngestionJob.user_id == self.user_id)
+        stmt = stmt.order_by(IngestionJob.id.asc())
         return list(self.db.scalars(stmt))
 
     def status_counts(self) -> dict[str, int]:
         counts = {status: 0 for status in JOB_STATUSES}
-        for job in self.db.scalars(select(IngestionJob)):
+        stmt = select(IngestionJob)
+        if self.user_id is not None:
+            stmt = stmt.where(IngestionJob.user_id == self.user_id)
+        for job in self.db.scalars(stmt):
             if job.status in counts:
                 counts[job.status] += 1
         return counts
@@ -140,7 +154,7 @@ class IngestionJobRepository:
         return job
 
     def _required(self, job_id: int) -> IngestionJob:
-        job = self.db.get(IngestionJob, job_id)
+        job = self.get(job_id)
         if job is None:
             raise ValueError(f"ingestion job {job_id} not found")
         return job

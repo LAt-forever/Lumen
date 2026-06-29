@@ -1,7 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Activity, Bot, BookOpen, Brain, GitBranch, Home, MessageSquare, Search, Settings, Sparkles } from 'lucide-react'
 
+import { AuthProvider, useAuth } from './auth/AuthContext'
 import { AppShell } from './components/AppShell'
+import { LoginPage } from './components/LoginPage'
 import type { NavItem } from './components/AppShell'
 
 const queryClient = new QueryClient()
@@ -19,10 +21,20 @@ const navItems: NavItem[] = [
   { label: '设置', icon: Settings, view: 'settings' },
 ]
 
+function ProtectedWorkbench() {
+  const { user, isChecking, logout } = useAuth()
+  if (!user) {
+    return <LoginPage />
+  }
+  return <AppShell accountLabel={isChecking ? '正在验证账户' : user.email} navItems={navItems} onLogout={logout} />
+}
+
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <AppShell navItems={navItems} />
+      <AuthProvider>
+        <ProtectedWorkbench />
+      </AuthProvider>
     </QueryClientProvider>
   )
 }

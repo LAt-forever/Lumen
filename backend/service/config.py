@@ -31,6 +31,11 @@ class Settings(BaseSettings):
     service_health_timeout_seconds: float = 2.0
     beat_heartbeat_path: Path | None = None
     beat_heartbeat_max_age_seconds: int = 90
+    auth_secret_key: str = "change-me-lumen-local-dev-secret"
+    access_token_expire_minutes: int = 60 * 24
+    registration_enabled: bool = False
+    bootstrap_user_email: str = "admin@example.com"
+    bootstrap_user_password: str = "admin-password"
 
     model_config = SettingsConfigDict(env_prefix="LUMEN_", env_file=".env", extra="ignore")
 

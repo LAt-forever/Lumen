@@ -6,6 +6,7 @@ import type {
   AgentProfileUpdate,
   AgentRunResponse,
   AgentToolLogRead,
+  AuthTokenRead,
   FavoriteRead,
   GlobalSearchResultRead,
   IngestionBatchRead,
@@ -33,22 +34,68 @@ import type {
   TagRead,
   TagSuggestionRead,
   TargetType,
+  UserRead,
 } from './types'
 
 const viteEnv = (import.meta as ImportMeta & { env?: { VITE_API_BASE?: string } }).env
 export const API_BASE = viteEnv?.VITE_API_BASE ?? 'http://127.0.0.1:8000'
+const ACCESS_TOKEN_KEY = 'lumen.accessToken'
+let unauthorizedHandler: (() => void) | undefined
 
 type ChatStreamHandlers = {
   onChunk?: (text: string) => void
 }
 
+export function getAccessToken() {
+  return window.localStorage.getItem(ACCESS_TOKEN_KEY)
+}
+
+export function setAccessToken(token: string) {
+  window.localStorage.setItem(ACCESS_TOKEN_KEY, token)
+}
+
+export function clearAccessToken() {
+  window.localStorage.removeItem(ACCESS_TOKEN_KEY)
+}
+
+export function setUnauthorizedHandler(handler: (() => void) | undefined) {
+  unauthorizedHandler = handler
+}
+
+function buildHeaders(isFormData: boolean, initHeaders?: HeadersInit): Record<string, string> {
+  const headers: Record<string, string> = {}
+  if (!isFormData) {
+    headers['Content-Type'] = 'application/json'
+  }
+  const token = getAccessToken()
+  if (token) {
+    headers.Authorization = `Bearer ${token}`
+  }
+  if (initHeaders instanceof Headers) {
+    initHeaders.forEach((value, key) => {
+      headers[key] = value
+    })
+  } else if (Array.isArray(initHeaders)) {
+    initHeaders.forEach(([key, value]) => {
+      headers[key] = value
+    })
+  } else if (initHeaders) {
+    Object.assign(headers, initHeaders)
+  }
+  return headers
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const isFormData = init?.body instanceof FormData
   const response = await fetch(`${API_BASE}${path}`, {
-    headers: isFormData ? init?.headers : { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
+    headers: buildHeaders(isFormData, init?.headers),
     method: init?.method ?? 'GET',
     ...init,
   })
+  if (response.status === 401) {
+    clearAccessToken()
+    unauthorizedHandler?.()
+  }
   if (!response.ok) {
     throw new Error(await response.text())
   }
@@ -114,6 +161,10 @@ async function readChatStream(response: Response, handlers: ChatStreamHandlers):
 
 export const api = {
   listSources: () => request<SourceRead[]>('/api/sources'),
+  login: (payload: { email: string; password: string }) =>
+    request<AuthTokenRead>('/api/auth/login', { method: 'POST', body: JSON.stringify(payload) }),
+  me: () => request<UserRead>('/api/auth/me'),
+  logout: () => request<{ status: string }>('/api/auth/logout', { method: 'POST' }),
   getSource: (sourceId: number) => request<SourceDetailRead>(`/api/sources/${sourceId}`),
   createSource: (payload: { title: string; source_type: 'note'; content: string }) =>
     request<SourceRead>('/api/sources', { method: 'POST', body: JSON.stringify(payload) }),
@@ -177,10 +228,14 @@ export const api = {
     }),
   askStream: async (message: string, handlers: ChatStreamHandlers = {}, conversationId?: number) => {
     const response = await fetch(`${API_BASE}/api/chat/stream`, {
-      headers: { 'Content-Type': 'application/json' },
+      headers: buildHeaders(false),
       method: 'POST',
       body: JSON.stringify({ message, conversation_id: conversationId }),
     })
+    if (response.status === 401) {
+      clearAccessToken()
+      unauthorizedHandler?.()
+    }
     if (!response.ok) {
       throw new Error(await response.text())
     }

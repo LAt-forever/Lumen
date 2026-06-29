@@ -41,6 +41,8 @@ function streamResponse(text: string) {
 
 describe('Lumen workbench', () => {
   beforeEach(() => {
+    window.localStorage.clear()
+    window.localStorage.setItem('lumen.accessToken', 'test-token')
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     vi.stubGlobal(
       'fetch',
@@ -48,6 +50,26 @@ describe('Lumen workbench', () => {
         const url = String(input)
         const method = init?.method ?? 'GET'
 
+        if (url.endsWith('/api/auth/me') && method === 'GET') {
+          return jsonResponse({
+            id: 1,
+            email: 'admin@example.com',
+            is_admin: true,
+            created_at: '2026-06-29T00:00:00',
+          })
+        }
+        if (url.endsWith('/api/auth/login') && method === 'POST') {
+          return jsonResponse({
+            access_token: 'login-token',
+            token_type: 'bearer',
+            user: {
+              id: 2,
+              email: 'lanhe@example.com',
+              is_admin: false,
+              created_at: '2026-06-29T00:00:00',
+            },
+          })
+        }
         if (url.endsWith('/api/sources') && method === 'GET') {
           return jsonResponse([
             {
@@ -933,7 +955,45 @@ describe('Lumen workbench', () => {
 
   afterEach(() => {
     cleanup()
+    window.localStorage.clear()
     vi.unstubAllGlobals()
+  })
+
+  it('shows the login page when no access token exists', () => {
+    window.localStorage.removeItem('lumen.accessToken')
+
+    render(<App />)
+
+    expect(screen.getByRole('heading', { name: '登录 Lumen' })).toBeInTheDocument()
+    expect(screen.getByLabelText('邮箱')).toBeInTheDocument()
+    expect(screen.getByLabelText('密码')).toBeInTheDocument()
+  })
+
+  it('logs in and opens the workbench', async () => {
+    const user = userEvent.setup()
+    window.localStorage.removeItem('lumen.accessToken')
+
+    render(<App />)
+
+    await user.type(screen.getByLabelText('邮箱'), 'lanhe@example.com')
+    await user.type(screen.getByLabelText('密码'), 'test-password')
+    await user.click(screen.getByRole('button', { name: '登录' }))
+
+    expect(await screen.findByText('询问或记录')).toBeInTheDocument()
+    expect(window.localStorage.getItem('lumen.accessToken')).toBe('login-token')
+  })
+
+  it('sends the bearer token with API requests', async () => {
+    render(<App />)
+
+    await screen.findByText('询问或记录')
+    const sourceRequest = vi.mocked(fetch).mock.calls.find(([url]) => String(url).endsWith('/api/sources'))
+
+    expect(sourceRequest?.[1]).toEqual(
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer test-token' }),
+      }),
+    )
   })
 
   it('renders the workbench and completes the ask and memory review loop', async () => {
