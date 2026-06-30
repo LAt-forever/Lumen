@@ -1,37 +1,42 @@
 [
   {
-    "id": "date-worklog",
-    "query": "2026年6月9日 Phase15 做了什么",
-    "expected_result_type": "source_chunk",
-    "expected_marker": "匹配日期",
-    "description": "Chinese date queries should retrieve the dated worklog chunk."
+    "id": "default-kb-only",
+    "query": "DefaultOnlySignal",
+    "backend": "local",
+    "knowledge_base_key": "default",
+    "expected_source_title": "Default KB retrieval note",
+    "expected_marker": "DefaultOnlySignal",
+    "expected_retrieval_source": "local",
+    "description": "Queries scoped to the default knowledge base should return only the default KB source even when another KB contains decoy text."
   },
   {
-    "id": "project-memory",
-    "query": "Phase15 组织和全局搜索项目",
-    "expected_result_type": "memory",
-    "expected_marker": "组织和全局搜索项目",
-    "description": "Project memory should be found by topic terms."
+    "id": "es-bm25-exact-keyword",
+    "query": "CometExactBM25Token",
+    "backend": "elasticsearch",
+    "knowledge_base_key": "default",
+    "expected_source_title": "Default KB retrieval note",
+    "expected_marker": "CometExactBM25Token",
+    "expected_retrieval_source": "elasticsearch",
+    "description": "ES BM25 exact keyword retrieval should reload the scoped source chunk from PostgreSQL."
   },
   {
-    "id": "preference-memory",
-    "query": "Phase15 搜索结果显示中文匹配原因",
-    "expected_result_type": "memory",
-    "expected_marker": "中文匹配原因",
-    "description": "Preference memory should be found by user preference language."
+    "id": "vector-semantic-text",
+    "query": "meaning of durable recall",
+    "backend": "elasticsearch",
+    "knowledge_base_key": "default",
+    "expected_source_title": "Default KB retrieval note",
+    "expected_marker": "Durable recall means",
+    "expected_retrieval_source": "elasticsearch",
+    "description": "Vector retrieval should surface semantically relevant text through the hybrid retrieval path."
   },
   {
-    "id": "answer-recall",
-    "query": "Phase15 收藏回答",
-    "expected_result_type": "message",
-    "expected_marker": "收藏回答",
-    "description": "Prior assistant answers should be searchable."
-  },
-  {
-    "id": "weak-evidence",
+    "id": "weak-evidence-fallback",
     "query": "ZqxvNoMatchToken",
-    "expected_result_type": null,
+    "backend": "auto",
+    "knowledge_base_key": "default",
+    "expected_source_title": null,
     "expected_marker": "",
-    "description": "Unrelated queries should return no top hit in the seeded corpus."
+    "expected_retrieval_source": null,
+    "description": "Weak evidence queries should fall back to local retrieval and return no source chunk in the seeded default KB."
   }
 ]

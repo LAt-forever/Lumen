@@ -22,6 +22,7 @@ class EmbeddingProviderConfig:
     dimensions: int
     batch_size: int = 32
     timeout_seconds: float = 30.0
+    profile_id: int | None = None
 
     def __post_init__(self) -> None:
         if self.dimensions < 1:
@@ -33,6 +34,9 @@ class EmbeddingProviderConfig:
 class HashEmbeddingProvider:
     def __init__(self, dimensions: int = 128):
         self.dimensions = dimensions
+        self.profile_id = None
+        self.model_name = "local-hash"
+        self.is_remote = False
 
     def embed(self, text: str) -> list[float]:
         vector = [0.0] * self.dimensions
@@ -51,6 +55,13 @@ class OpenAICompatibleEmbeddingProvider:
     def __init__(self, config: EmbeddingProviderConfig):
         self.config = config
         self.base_url = config.base_url.rstrip("/") + "/"
+        self.dimensions = config.dimensions
+        self.profile_id = config.profile_id
+        self.model_name = config.model
+        self.is_remote = True
+
+    def embed(self, text: str) -> list[float]:
+        return self.embed_many([text])[0]
 
     def embed_many(self, texts: list[str]) -> list[list[float]]:
         embeddings: list[list[float]] = []
@@ -113,6 +124,7 @@ def build_embedding_provider(settings: Settings, active_profile: LLMProviderProf
                     dimensions=active_profile.embedding_dimensions or settings.embedding_dimensions,
                     batch_size=settings.embedding_batch_size,
                     timeout_seconds=active_profile.timeout_seconds,
+                    profile_id=active_profile.id,
                 )
             )
     return HashEmbeddingProvider(dimensions=settings.embedding_dimensions)

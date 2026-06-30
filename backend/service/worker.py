@@ -11,6 +11,7 @@ from celery.signals import worker_ready
 from service import db as dbmod
 from service.config import Settings
 from service.core.ingestion import IngestionService, parse_payload
+from service.core.runtime_embeddings import build_user_embedding_provider
 from service.repositories.chunks import ChunkRepository
 from service.repositories.ingestion_jobs import IngestionJobRepository
 from service.repositories.indexing_runs import IndexingRunRepository
@@ -98,7 +99,12 @@ def run_ingestion_job(job_id: int) -> None:
                 sources.mark_parsing(job.source_id)
             jobs.update_progress(job.id, 1, job.progress_total, "正在解析资料")
 
-            service = IngestionService(sources, chunks, indexing_runs=indexing_runs)
+            service = IngestionService(
+                sources,
+                chunks,
+                indexing_runs=indexing_runs,
+                embeddings=build_user_embedding_provider(db, job.user_id, settings),
+            )
             payload = parse_payload(job.payload_json)
             asyncio.run(_dispatch_job(service, job.job_type, job.source_id, payload))
 

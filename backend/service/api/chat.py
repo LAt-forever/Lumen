@@ -9,6 +9,7 @@ from service.core.knowledge import KnowledgeService
 from service.core.llm import build_answer_provider, resolve_runtime_llm_config
 from service.core.memory import MemoryService
 from service.core.retrieval import RetrievalService
+from service.core.runtime_embeddings import build_local_embedding_provider, build_user_embedding_provider
 from service.db import get_db
 from service.repositories.chunks import ChunkRepository
 from service.repositories.conversations import ConversationRepository
@@ -46,7 +47,14 @@ def _retrieval_service(db: Session, user_id: int, knowledge_base_id: int | None)
         _raise_kb_http(exc)
     sources = SourceRepository(db, user_id=user_id, knowledge_base_id=knowledge_base.id)
     chunks = ChunkRepository(db, user_id=user_id, knowledge_base_id=knowledge_base.id)
-    return ScopedRetrieval(RetrievalService(KnowledgeService(sources, chunks), chunks), knowledge_base.id)
+    return ScopedRetrieval(
+        RetrievalService(
+            KnowledgeService(sources, chunks, embeddings=build_local_embedding_provider()),
+            chunks,
+            embeddings=build_user_embedding_provider(db, user_id),
+        ),
+        knowledge_base.id,
+    )
 
 
 @router.post("", response_model=ChatResponse)

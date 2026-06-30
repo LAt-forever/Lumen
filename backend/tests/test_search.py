@@ -58,6 +58,32 @@ def test_search_with_knowledge_base_id_only_returns_requested_kb_chunks(client, 
     assert all(result["retrieval_source"] == "local" for result in results)
 
 
+def test_local_search_uses_configured_hash_dimensions_for_fallback(client, monkeypatch):
+    monkeypatch.setenv("LUMEN_RETRIEVAL_BACKEND", "local")
+    from service.config import get_settings
+
+    get_settings.cache_clear()
+    decoy = client.post(
+        "/api/sources",
+        json={
+            "title": "Dimension Decoy",
+            "source_type": "note",
+            "content": "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu",
+        },
+    ).json()
+    exact = client.post(
+        "/api/sources",
+        json={"title": "Dimension Exact", "source_type": "note", "content": "alpha beta"},
+    ).json()
+    assert client.post(f"/api/sources/{decoy['id']}/index").status_code == 200
+    assert client.post(f"/api/sources/{exact['id']}/index").status_code == 200
+
+    response = client.get("/api/search", params={"q": "alpha beta"})
+
+    assert response.status_code == 200
+    assert response.json()[0]["source_title"] == "Dimension Exact"
+
+
 def test_search_api_uses_runtime_retrieval_backend(client, monkeypatch):
     calls = []
 

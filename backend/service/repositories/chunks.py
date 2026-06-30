@@ -30,6 +30,7 @@ class ChunkRepository:
         embedding_model: str | None,
         embedding_dimensions: int | None,
         index_status: str,
+        embedding_provider_profile_id: int | None = None,
     ) -> list[SourceChunk]:
         source = self._source(source_id)
         if source is None:
@@ -48,6 +49,7 @@ class ChunkRepository:
                 content_hash=hashlib.sha256(text.encode("utf-8")).hexdigest(),
                 token_count=max(1, len(text) // 4),
                 embedding_status=embedding_status,
+                embedding_provider_profile_id=embedding_provider_profile_id,
                 embedding_model=embedding_model,
                 embedding_dimensions=embedding_dimensions,
                 embedded_at=now if embedding_status == "embedded" else None,

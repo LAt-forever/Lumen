@@ -3,7 +3,7 @@ from sqlalchemy.orm import sessionmaker
 
 from service.db import Base
 from service import db as dbmod
-from service.models import Source, SourceChunk
+from service.models import IndexingRun, Source, SourceChunk
 from service.repositories.sources import SourceRepository
 from service.schemas import SourceCreate
 
@@ -110,6 +110,59 @@ def test_indexed_source_chunks_include_scope_and_indexing_metadata(client):
     assert chunk.content_hash
     assert chunk.embedding_status in ("embedded", "skipped")
     assert chunk.index_status in ("indexed", "skipped")
+
+
+def test_index_source_uses_active_embedding_profile(client, monkeypatch):
+    requests = []
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"data": [{"embedding": [1.0, 0.0, 0.0]} for _text in requests[-1]]}
+
+    def fake_post(url, headers, json, timeout):
+        requests.append(json["input"])
+        return FakeResponse()
+
+    monkeypatch.setattr("service.core.embeddings.httpx.post", fake_post)
+    profile = client.post(
+        "/api/settings/provider-profiles",
+        json={
+            "name": "Embedding active",
+            "provider": "openai-compatible",
+            "base_url": "https://embedding.example/v1",
+            "model": "gpt-test",
+            "api_key": "embedding-secret",
+            "timeout_seconds": 12,
+            "fallback_enabled": True,
+            "is_active": True,
+            "supports_chat": False,
+            "supports_embedding": True,
+            "embedding_model": "text-embedding-test",
+            "embedding_dimensions": 3,
+        },
+    ).json()
+    source = client.post(
+        "/api/sources",
+        json={"title": "Embedding source", "source_type": "note", "content": "Active embedding profile content."},
+    ).json()
+
+    response = client.post(f"/api/sources/{source['id']}/index")
+
+    assert response.status_code == 200
+    assert requests == [["Active embedding profile content."]]
+    with dbmod.SessionLocal() as db:
+        chunk = db.query(SourceChunk).filter(SourceChunk.source_id == source["id"]).one()
+        run = db.query(IndexingRun).filter(IndexingRun.source_id == source["id"]).one()
+    assert chunk.embedding_status == "embedded"
+    assert chunk.embedding_provider_profile_id == profile["id"]
+    assert chunk.embedding_model == "text-embedding-test"
+    assert chunk.embedding_dimensions == 3
+    assert chunk.index_status == "pending"
+    assert run.embedding_provider_profile_id == profile["id"]
+    assert run.embedding_model == "text-embedding-test"
 
 
 def test_delete_source_removes_it_from_future_search(client):

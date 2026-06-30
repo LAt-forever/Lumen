@@ -49,13 +49,17 @@ class KnowledgeService:
         if source is None:
             raise ValueError(f"source {source_id} not found")
         embedding_dimensions = getattr(self.embeddings, "dimensions", None)
+        embedding_model = getattr(self.embeddings, "model_name", "local-hash")
+        embedding_provider_profile_id = getattr(self.embeddings, "profile_id", None)
+        embedding_status = "embedded" if getattr(self.embeddings, "is_remote", False) else "skipped"
+        index_status = "pending" if embedding_status == "embedded" else "skipped"
         run = self.indexing_runs.create(
             run_type="source",
             source_id=source_id,
             knowledge_base_id=source.knowledge_base_id,
             job_id=job_id,
-            embedding_provider_profile_id=None,
-            embedding_model="local-hash",
+            embedding_provider_profile_id=embedding_provider_profile_id,
+            embedding_model=embedding_model,
             embedding_dimensions=embedding_dimensions,
         )
         try:
@@ -68,15 +72,17 @@ class KnowledgeService:
                 self.sources.mark_failed(source_id, message)
                 self.indexing_runs.mark_failed(run.id, message)
                 return
-            indexed = [(chunk, dumps_embedding(self.embeddings.embed(chunk))) for chunk in chunks]
+            embeddings = self._embed_chunks(chunks)
+            indexed = [(chunk, dumps_embedding(vector)) for chunk, vector in zip(chunks, embeddings, strict=True)]
             self.indexing_runs.update_progress(run.id, chunks_total=len(indexed), chunks_embedded=len(indexed))
             self.chunks.replace_for_source(
                 source_id,
                 indexed,
-                embedding_status="skipped",
-                embedding_model="local-hash",
+                embedding_status=embedding_status,
+                embedding_provider_profile_id=embedding_provider_profile_id,
+                embedding_model=embedding_model,
                 embedding_dimensions=embedding_dimensions,
-                index_status="skipped",
+                index_status=index_status,
             )
             self.indexing_runs.mark_succeeded(
                 run.id,
@@ -86,8 +92,20 @@ class KnowledgeService:
             )
             self.sources.mark_indexed(source_id)
         except Exception as exc:
-            self.indexing_runs.mark_failed(run.id, str(exc))
+            message = str(exc)
+            self.sources.mark_failed(source_id, message)
+            self.indexing_runs.mark_failed(run.id, message)
             raise
+
+    def _embed_chunks(self, chunks: list[str]) -> list[list[float]]:
+        embed_many = getattr(self.embeddings, "embed_many", None)
+        if callable(embed_many):
+            vectors = embed_many(chunks)
+        else:
+            vectors = [self.embeddings.embed(chunk) for chunk in chunks]
+        if len(vectors) != len(chunks):
+            raise ValueError("embedding response count mismatch")
+        return vectors
 
     def search(self, query: str, limit: int = 5) -> list[ChunkRead]:
         query_vector = self.embeddings.embed(query)

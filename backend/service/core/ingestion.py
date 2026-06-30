@@ -84,10 +84,11 @@ class IngestionService:
         sources: SourceRepository,
         chunks: ChunkRepository,
         indexing_runs: IndexingRunRepository | None = None,
+        embeddings=None,
     ):
         self.sources = sources
         self.chunks = chunks
-        self.knowledge = KnowledgeService(sources, chunks, indexing_runs=indexing_runs)
+        self.knowledge = KnowledgeService(sources, chunks, indexing_runs=indexing_runs, embeddings=embeddings)
 
     async def create_and_index_upload(self, filename: str, file_data: bytes) -> Source:
         source_type = source_type_for_filename(filename)
