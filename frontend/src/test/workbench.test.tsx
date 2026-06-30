@@ -28,6 +28,15 @@ function noContentResponse() {
   } as Response)
 }
 
+function unauthorizedResponse() {
+  return Promise.resolve({
+    ok: false,
+    status: 401,
+    text: () => Promise.resolve('Unauthorized'),
+    json: () => Promise.resolve({ detail: 'Unauthorized' }),
+  } as Response)
+}
+
 function streamResponse(text: string) {
   const encoder = new TextEncoder()
   const stream = new ReadableStream({
@@ -1227,6 +1236,130 @@ describe('Lumen workbench', () => {
 
     expect(await screen.findByText('询问或记录')).toBeInTheDocument()
     expect(window.localStorage.getItem('lumen.accessToken')).toBe('login-token')
+  })
+
+  it('clears cached workbench data and active knowledge base when switching accounts', async () => {
+    const user = userEvent.setup()
+    const defaultFetch = vi.mocked(fetch).getMockImplementation()
+    let resolveSecondSources: ((response: Response) => void) | undefined
+    const secondSourcesResponse = new Promise<Response>((resolve) => {
+      resolveSecondSources = resolve
+    })
+
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      const method = init?.method ?? 'GET'
+      const token = window.localStorage.getItem('lumen.accessToken')
+
+      if (url.endsWith('/api/auth/me') && method === 'GET') {
+        return jsonResponse({
+          id: 1,
+          email: 'first@example.com',
+          is_admin: false,
+          created_at: '2026-06-29T00:00:00',
+        })
+      }
+      if (url.endsWith('/api/auth/logout') && method === 'POST') {
+        return jsonResponse({ status: 'ok' })
+      }
+      if (url.endsWith('/api/auth/login') && method === 'POST') {
+        return jsonResponse({
+          access_token: 'second-token',
+          token_type: 'bearer',
+          user: {
+            id: 2,
+            email: 'second@example.com',
+            is_admin: false,
+            created_at: '2026-06-29T00:00:00',
+          },
+        })
+      }
+      if (url.endsWith('/api/knowledge-bases') && method === 'GET') {
+        return jsonResponse([
+          {
+            id: 1,
+            name: token === 'second-token' ? '第二账户知识库' : '第一账户知识库',
+            description: null,
+            status: 'active',
+            is_default: true,
+            created_at: '2026-06-29T00:00:00',
+            updated_at: '2026-06-29T00:00:00',
+          },
+        ])
+      }
+      if ((url.endsWith('/api/sources') || url.includes('/api/sources?')) && method === 'GET') {
+        if (token === 'second-token') {
+          return secondSourcesResponse
+        }
+        return jsonResponse([
+          {
+            id: 31,
+            title: '第一账户资料',
+            source_type: 'note',
+            status: 'indexed',
+            url: null,
+            filename: null,
+            error_message: null,
+            created_at: '2026-06-29T00:00:00',
+          },
+        ])
+      }
+      return defaultFetch?.(input, init) ?? jsonResponse([])
+    })
+
+    render(<App />)
+
+    expect(await screen.findByText('第一账户资料')).toBeInTheDocument()
+    await user.selectOptions(screen.getByLabelText('知识库'), '1')
+    expect(window.localStorage.getItem('lumen.activeKnowledgeBaseId')).toBe('1')
+
+    await user.click(screen.getByRole('button', { name: '退出登录' }))
+    expect(await screen.findByRole('heading', { name: '登录 Lumen' })).toBeInTheDocument()
+    expect(window.localStorage.getItem('lumen.activeKnowledgeBaseId')).toBeNull()
+
+    await user.type(screen.getByLabelText('邮箱'), 'second@example.com')
+    await user.type(screen.getByLabelText('密码'), 'test-password')
+    await user.click(screen.getByRole('button', { name: '登录' }))
+
+    expect(await screen.findByText('询问或记录')).toBeInTheDocument()
+    expect(screen.queryByText('第一账户资料')).not.toBeInTheDocument()
+    resolveSecondSources?.(
+      new Response(
+        JSON.stringify([
+          {
+            id: 41,
+            title: '第二账户资料',
+            source_type: 'note',
+            status: 'indexed',
+            url: null,
+            filename: null,
+            error_message: null,
+            created_at: '2026-06-29T00:00:00',
+          },
+        ]),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    )
+    expect(await screen.findByText('第二账户资料')).toBeInTheDocument()
+  })
+
+  it('clears session state when an API request returns unauthorized', async () => {
+    const defaultFetch = vi.mocked(fetch).getMockImplementation()
+    window.localStorage.setItem('lumen.activeKnowledgeBaseId', '1')
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      const method = init?.method ?? 'GET'
+      if (url.endsWith('/api/auth/me') && method === 'GET') {
+        return unauthorizedResponse()
+      }
+      return defaultFetch?.(input, init) ?? jsonResponse([])
+    })
+
+    render(<App />)
+
+    expect(await screen.findByRole('heading', { name: '登录 Lumen' })).toBeInTheDocument()
+    expect(window.localStorage.getItem('lumen.accessToken')).toBeNull()
+    expect(window.localStorage.getItem('lumen.activeKnowledgeBaseId')).toBeNull()
   })
 
   it('sends the bearer token with API requests', async () => {

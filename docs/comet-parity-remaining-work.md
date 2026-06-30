@@ -55,7 +55,7 @@
 
 - `cd backend && uv run pytest`：270 passed, 1 skipped。
 - `cd backend && LUMEN_DATABASE_URL=sqlite:////private/tmp/lumen-phase2-retrieval-eval.db uv run python -m service.eval.retrieval --seed`：4/4 retrieval eval cases passed。
-- `cd frontend && npm test -- --run`：31 passed。
+- `cd frontend && npm test -- --run`：33 passed。
 - `cd frontend && npm run build`：通过。
 - `cd backend && LUMEN_DATABASE_URL=sqlite:////private/tmp/lumen-phase2-final-alembic.db uv run alembic -c alembic.ini upgrade head`：通过。
 - `docker compose config --services`：通过，服务包含 `elasticsearch`、`neo4j`、`postgres`、`redis`、`backend`、`worker`、`beat`、`frontend`。

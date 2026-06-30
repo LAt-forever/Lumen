@@ -5,6 +5,10 @@ import type { KnowledgeBaseRead } from '../api/types'
 
 const ACTIVE_KB_KEY = 'lumen.activeKnowledgeBaseId'
 
+export function clearActiveKnowledgeBaseSelection() {
+  window.localStorage.removeItem(ACTIVE_KB_KEY)
+}
+
 type KnowledgeBaseContextValue = {
   knowledgeBases: KnowledgeBaseRead[]
   activeKnowledgeBases: KnowledgeBaseRead[]
@@ -38,7 +42,7 @@ export function KnowledgeBaseProvider({ children }: { children: ReactNode }) {
     if (activeKnowledgeBases.length === 0) {
       if (activeKnowledgeBaseId !== null) {
         setActiveKnowledgeBaseIdState(null)
-        window.localStorage.removeItem(ACTIVE_KB_KEY)
+        clearActiveKnowledgeBaseSelection()
       }
       return
     }
@@ -51,7 +55,7 @@ export function KnowledgeBaseProvider({ children }: { children: ReactNode }) {
   const setActiveKnowledgeBaseId = (id: number | null) => {
     setActiveKnowledgeBaseIdState(id)
     if (id === null) {
-      window.localStorage.removeItem(ACTIVE_KB_KEY)
+      clearActiveKnowledgeBaseSelection()
       return
     }
     window.localStorage.setItem(ACTIVE_KB_KEY, String(id))

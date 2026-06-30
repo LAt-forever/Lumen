@@ -1,6 +1,8 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useState } from 'react'
 
 import { api, clearAccessToken, getAccessToken, setAccessToken, setUnauthorizedHandler } from '../api/client'
+import { clearActiveKnowledgeBaseSelection } from '../knowledgeBase/KnowledgeBaseContext'
 import type { UserRead } from '../api/types'
 
 type AuthContextValue = {
@@ -24,16 +26,22 @@ function provisionalUser(): UserRead | null {
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const queryClient = useQueryClient()
   const [user, setUser] = useState<UserRead | null>(() => provisionalUser())
   const [isChecking, setIsChecking] = useState(() => Boolean(getAccessToken()))
 
-  useEffect(() => {
-    setUnauthorizedHandler(() => {
-      setUser(null)
-      setIsChecking(false)
-    })
+  const clearSessionState = useCallback(() => {
+    clearAccessToken()
+    clearActiveKnowledgeBaseSelection()
+    queryClient.clear()
+    setUser(null)
+    setIsChecking(false)
+  }, [queryClient])
+
+  useLayoutEffect(() => {
+    setUnauthorizedHandler(clearSessionState)
     return () => setUnauthorizedHandler(undefined)
-  }, [])
+  }, [clearSessionState])
 
   useEffect(() => {
     if (!getAccessToken()) {
@@ -48,8 +56,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       })
       .catch(() => {
         if (active) {
-          clearAccessToken()
-          setUser(null)
+          clearSessionState()
         }
       })
       .finally(() => {
@@ -66,6 +73,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isChecking,
       login: async (email: string, password: string) => {
         const result = await api.login({ email, password })
+        queryClient.clear()
+        clearActiveKnowledgeBaseSelection()
         setAccessToken(result.access_token)
         setUser(result.user)
         setIsChecking(false)
@@ -74,13 +83,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         try {
           if (getAccessToken()) await api.logout()
         } finally {
-          clearAccessToken()
-          setUser(null)
-          setIsChecking(false)
+          clearSessionState()
         }
       },
     }),
-    [user, isChecking],
+    [user, isChecking, clearSessionState, queryClient],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
