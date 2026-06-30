@@ -5,6 +5,7 @@ from service.core.chunking import chunk_text
 from service.core.embeddings import HashEmbeddingProvider, cosine, dumps_embedding, loads_embedding
 from service.models import SourceChunk
 from service.repositories.chunks import ChunkRepository
+from service.repositories.indexing_runs import IndexingRunRepository
 from service.repositories.sources import SourceRepository
 from service.schemas import ChunkRead
 
@@ -31,25 +32,80 @@ class KnowledgeService:
         self,
         sources: SourceRepository,
         chunks: ChunkRepository,
+        indexing_runs: IndexingRunRepository | None = None,
         embeddings: HashEmbeddingProvider | None = None,
     ):
         self.sources = sources
         self.chunks = chunks
+        self.indexing_runs = indexing_runs or IndexingRunRepository(
+            chunks.db,
+            user_id=chunks.user_id,
+            knowledge_base_id=chunks.knowledge_base_id,
+        )
         self.embeddings = embeddings or HashEmbeddingProvider()
 
-    def index_source(self, source_id: int) -> None:
+    def index_source(self, source_id: int, job_id: int | None = None) -> None:
         source = self.sources.get(source_id)
         if source is None:
             raise ValueError(f"source {source_id} not found")
-        self.sources.mark_parsing(source_id)
-        text = (source.content or "").strip()
-        chunks = chunk_text(text)
-        if not chunks:
-            self.sources.mark_failed(source_id, "No text content found")
-            return
-        indexed = [(chunk, dumps_embedding(self.embeddings.embed(chunk))) for chunk in chunks]
-        self.chunks.replace_for_source(source_id, indexed)
-        self.sources.mark_indexed(source_id)
+        embedding_dimensions = getattr(self.embeddings, "dimensions", None)
+        embedding_model = getattr(self.embeddings, "model_name", "local-hash")
+        embedding_provider_profile_id = getattr(self.embeddings, "profile_id", None)
+        embedding_status = "embedded" if getattr(self.embeddings, "is_remote", False) else "skipped"
+        index_status = "pending" if embedding_status == "embedded" else "skipped"
+        run = self.indexing_runs.create(
+            run_type="source",
+            source_id=source_id,
+            knowledge_base_id=source.knowledge_base_id,
+            job_id=job_id,
+            embedding_provider_profile_id=embedding_provider_profile_id,
+            embedding_model=embedding_model,
+            embedding_dimensions=embedding_dimensions,
+        )
+        try:
+            self.indexing_runs.mark_running(run.id)
+            self.sources.mark_parsing(source_id)
+            text = (source.content or "").strip()
+            chunks = chunk_text(text)
+            if not chunks:
+                message = "No text content found"
+                self.sources.mark_failed(source_id, message)
+                self.indexing_runs.mark_failed(run.id, message)
+                return
+            embeddings = self._embed_chunks(chunks)
+            indexed = [(chunk, dumps_embedding(vector)) for chunk, vector in zip(chunks, embeddings, strict=True)]
+            self.indexing_runs.update_progress(run.id, chunks_total=len(indexed), chunks_embedded=len(indexed))
+            self.chunks.replace_for_source(
+                source_id,
+                indexed,
+                embedding_status=embedding_status,
+                embedding_provider_profile_id=embedding_provider_profile_id,
+                embedding_model=embedding_model,
+                embedding_dimensions=embedding_dimensions,
+                index_status=index_status,
+            )
+            self.indexing_runs.mark_succeeded(
+                run.id,
+                chunks_total=len(indexed),
+                chunks_embedded=len(indexed),
+                chunks_indexed=0,
+            )
+            self.sources.mark_indexed(source_id)
+        except Exception as exc:
+            message = str(exc)
+            self.sources.mark_failed(source_id, message)
+            self.indexing_runs.mark_failed(run.id, message)
+            raise
+
+    def _embed_chunks(self, chunks: list[str]) -> list[list[float]]:
+        embed_many = getattr(self.embeddings, "embed_many", None)
+        if callable(embed_many):
+            vectors = embed_many(chunks)
+        else:
+            vectors = [self.embeddings.embed(chunk) for chunk in chunks]
+        if len(vectors) != len(chunks):
+            raise ValueError("embedding response count mismatch")
+        return vectors
 
     def search(self, query: str, limit: int = 5) -> list[ChunkRead]:
         query_vector = self.embeddings.embed(query)

@@ -2,6 +2,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from service.db import Base
+from service.models import User
 from service.eval.retrieval import (
     load_cases,
     run_retrieval_evaluation,
@@ -17,5 +18,6 @@ def test_retrieval_evaluation_seeded_corpus_passes():
     seed_retrieval_evaluation_corpus(db)
     results = run_retrieval_evaluation(db)
 
+    assert db.get(User, 1) is not None
     assert len(results) == len(load_cases())
     assert all(result.passed for result in results)

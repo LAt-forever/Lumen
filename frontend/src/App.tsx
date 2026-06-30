@@ -1,9 +1,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { Activity, Bot, BookOpen, Brain, GitBranch, Home, MessageSquare, Search, Settings, Sparkles } from 'lucide-react'
+import { Activity, Bot, BookOpen, Brain, Database, GitBranch, Home, MessageSquare, Search, Settings, Sparkles } from 'lucide-react'
 
 import { AuthProvider, useAuth } from './auth/AuthContext'
 import { AppShell } from './components/AppShell'
 import { LoginPage } from './components/LoginPage'
+import { KnowledgeBaseProvider } from './knowledgeBase/KnowledgeBaseContext'
 import type { NavItem } from './components/AppShell'
 
 const queryClient = new QueryClient()
@@ -12,6 +13,7 @@ const navItems: NavItem[] = [
   { label: '今天', icon: Home, view: 'today' },
   { label: '提问', icon: MessageSquare, view: 'ask' },
   { label: '资料库', icon: BookOpen, view: 'library' },
+  { label: '知识库', icon: Database, view: 'knowledge-base' },
   { label: '记忆', icon: Brain, view: 'memory' },
   { label: '图谱', icon: GitBranch, view: 'graph' },
   { label: 'Agent', icon: Bot, view: 'agent' },
@@ -26,7 +28,11 @@ function ProtectedWorkbench() {
   if (!user) {
     return <LoginPage />
   }
-  return <AppShell accountLabel={isChecking ? '正在验证账户' : user.email} navItems={navItems} onLogout={logout} />
+  return (
+    <KnowledgeBaseProvider>
+      <AppShell accountLabel={isChecking ? '正在验证账户' : user.email} navItems={navItems} onLogout={logout} />
+    </KnowledgeBaseProvider>
+  )
 }
 
 export default function App() {

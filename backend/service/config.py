@@ -20,6 +20,12 @@ class Settings(BaseSettings):
     llm_timeout_seconds: float = 30.0
     llm_fallback_enabled: bool = True
     embedding_mode: str = "hash"
+    embedding_dimensions: int = 1536
+    embedding_batch_size: int = 32
+    retrieval_backend: str = "auto"
+    retrieval_bm25_weight: float = 1.0
+    retrieval_vector_weight: float = 1.0
+    elasticsearch_index: str = "lumen_source_chunks"
     upload_storage_path: str = "data/uploads"
     tesseract_cmd: str | None = None
     playwright_enabled: bool = True

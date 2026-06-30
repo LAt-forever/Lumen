@@ -34,6 +34,25 @@ def test_register_is_disabled_by_default(client):
     assert response.status_code == 403
 
 
+def test_register_rejects_existing_email_when_enabled(client, monkeypatch):
+    from service.config import get_settings
+
+    monkeypatch.setenv("LUMEN_REGISTRATION_ENABLED", "true")
+    get_settings.cache_clear()
+
+    response = client.post(
+        "/api/auth/register",
+        json={"email": "admin@example.com", "password": "attacker-password"},
+    )
+
+    assert response.status_code == 409
+    bad_login = client.post(
+        "/api/auth/login",
+        json={"email": "admin@example.com", "password": "attacker-password"},
+    )
+    assert bad_login.status_code == 401
+
+
 def test_business_api_requires_access_token(anonymous_client):
     response = anonymous_client.get("/api/sources")
 

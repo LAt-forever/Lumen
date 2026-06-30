@@ -10,14 +10,17 @@
 - `docs/superpowers/specs/2026-06-22-lumen-comet-parity-program-design.md`
 - `docs/superpowers/plans/2026-06-22-lumen-comet-parity-phase-0-runtime-foundation.md`
 - `docs/superpowers/plans/2026-06-29-lumen-comet-parity-phase-1-auth-isolation.md`
+- `docs/superpowers/specs/2026-06-29-lumen-comet-parity-phase-2-knowledgebase-es-retrieval-design.md`
+- `docs/superpowers/plans/2026-06-29-lumen-comet-parity-phase-2-knowledgebase-es-retrieval.md`
 
 ## 当前开发状态
 
 - Phase 0 运行栈基础已落地，仍需在 Docker daemon 可用环境中完成完整 compose smoke。
-- Phase 1 认证、用户与数据隔离已完成第一版实现，代码尚待提交和合并。
+- Phase 1 认证、用户与数据隔离已完成并已合并。
+- Phase 2 知识库、embedding profile、ES projection、hybrid retrieval、搜索/聊天切换和前端知识库工作台已完成第一版实现。
 - 当前认证策略为邮箱密码登录 + JWT access token + bootstrap 用户 + 前端登出清理 token。
 - refresh token 或 session 续期策略尚未实现，进入共享或生产环境前需要单独决策。
-- 下一轮主线建议进入 Phase 2：知识库、多知识库归属、真实 embedding 和 Elasticsearch 混合检索。
+- 下一轮主线建议进入 Phase 3：图片与文档知识 surfaces，补齐 asset 状态、详情页和可重试索引体验。
 
 ## 当前已完成的基础
 
@@ -30,6 +33,11 @@
 - Phase 1 已新增邮箱密码登录、JWT access token、bootstrap 用户、前端登录页和受保护工作台。
 - 核心业务数据、模型配置、Agent 配置、reranker 配置和 worker job 已接入用户 scope。
 - README、环境变量示例和 Docker Compose 环境变量已更新 Phase 0/Phase 1 说明。
+- Phase 2 已新增 KnowledgeBase 模型、API、前端选择器和知识库管理页。
+- 资料、摄取队列、搜索、聊天和全局搜索 source chunk 候选已接入 knowledge base scope。
+- Provider profile 已支持 embedding 能力、OpenAI-compatible embedding 测试和 active embedding 索引接线。
+- SourceChunk 和 IndexingRun 已记录 embedding/index 状态、user scope 和 knowledge base scope。
+- Elasticsearch source chunk projection、BM25/vector 检索、RRF 混合排序、reranker hook 和 local fallback 已接入 RetrievalService。
 - 后端、前端测试和前端构建已通过。
 
 ## 最新验证记录
@@ -42,6 +50,16 @@
 - `cd backend && LUMEN_DATABASE_URL=sqlite:////private/tmp/lumen-phase1-alembic-final.db uv run alembic -c alembic.ini upgrade head`：通过。
 - `docker compose config --services`：通过。
 - `docker compose up --build -d`：未完成；本机 Docker daemon 未运行，错误为无法连接 `/Users/lanhezheng/.docker/run/docker.sock`。
+
+2026-06-29 Phase 2 实现后已完成：
+
+- `cd backend && uv run pytest`：270 passed, 1 skipped。
+- `cd backend && LUMEN_DATABASE_URL=sqlite:////private/tmp/lumen-phase2-retrieval-eval.db uv run python -m service.eval.retrieval --seed`：4/4 retrieval eval cases passed。
+- `cd frontend && npm test -- --run`：33 passed。
+- `cd frontend && npm run build`：通过。
+- `cd backend && LUMEN_DATABASE_URL=sqlite:////private/tmp/lumen-phase2-final-alembic.db uv run alembic -c alembic.ini upgrade head`：通过。
+- `docker compose config --services`：通过，服务包含 `elasticsearch`、`neo4j`、`postgres`、`redis`、`backend`、`worker`、`beat`、`frontend`。
+- `docker compose up --build -d`：未完成；本机 Docker daemon 未运行，原始错误为 `unable to get image 'neo4j:5-community': Cannot connect to the Docker daemon at unix:///Users/lanhezheng/.docker/run/docker.sock. Is the docker daemon running?`。
 
 ## Phase 0 剩余收尾
 
@@ -89,25 +107,26 @@
 
 目标：引入多知识库、真实 embedding 和 ES 混合检索，替换当前 hash embedding 和本地关键词排序。
 
-- [ ] 新增 KnowledgeBase 模型。
-- [ ] 新增知识库创建、重命名、归档、删除 API。
-- [ ] 前端新增知识库选择器和知识库页面。
-- [ ] 将现有 sources 分配到默认知识库。
-- [ ] 新增 SourceAsset、SourceChunk、IndexingRun 或等价索引状态模型。
-- [ ] 扩展 provider profile，支持 embedding 能力。
-- [ ] 决定第一版生产 embedding provider。
-- [ ] 新增 Elasticsearch index template。
+- [x] 新增 KnowledgeBase 模型。
+- [x] 新增知识库创建、重命名、归档、恢复和删除空知识库 API。
+- [x] 前端新增知识库选择器和知识库页面。
+- [x] 将现有 sources 分配到默认知识库。
+- [x] 新增 SourceChunk、IndexingRun 和等价索引状态模型；SourceAsset 留到 Phase 3 文档/图片 asset 体验。
+- [x] 扩展 provider profile，支持 embedding 能力。
+- [x] 决定第一版生产 embedding provider：OpenAI-compatible embeddings API。
+- [x] 新增 Elasticsearch source chunk projection mapping。
 - [ ] 决定本地 ES 中文 analyzer 配置。
-- [ ] 新增 ES projection service。
-- [ ] 摄取完成后写入 ES 搜索投影。
-- [ ] 实现 BM25 检索。
-- [ ] 实现 vector 检索。
-- [ ] 实现 BM25/vector 混合排序。
-- [ ] 接入 reranker 到真实检索路径。
-- [ ] 搜索和聊天改为使用 ES 检索。
-- [ ] 新增 ES rebuild/backfill 命令。
-- [ ] 删除 ES 数据后可从 PostgreSQL 和文件重建。
-- [ ] 扩展检索评测套件，输出命中率和引用质量指标。
+- [x] 新增 ES projection service。
+- [ ] 摄取完成后自动写入 ES 搜索投影；当前已有 projection service 和 rebuild helper，自动写入仍需后续接线。
+- [x] 实现 BM25 检索。
+- [x] 实现 vector 检索。
+- [x] 实现 BM25/vector 混合排序。
+- [x] 接入 reranker 到真实检索路径。
+- [x] 搜索和聊天改为使用 RetrievalService 的 ES/auto 检索路径。
+- [ ] 新增 ES rebuild/backfill 命令；当前只有 service helper。
+- [ ] 删除 ES 数据后可从 PostgreSQL 和文件重建；当前可从已 embedded chunks 重建 source chunk projection。
+- [x] 扩展检索评测套件，覆盖默认知识库隔离、ES BM25、vector 语义文本和弱证据 fallback。
+- [ ] 将检索评测输出升级为命中率和引用质量趋势指标。
 
 ## Phase 3：图片与文档知识对标
 
@@ -284,31 +303,30 @@
 
 ## 下一步建议
 
-下一步优先做 Phase 2：知识库与 Elasticsearch 检索。
+下一步优先做 Phase 3：图片与文档知识对标。
 
 原因：
 
-- Phase 1 已经给 PostgreSQL 核心表、配置表和 worker job 建立用户边界。
-- 后续 ES、Neo4j、Agent、MCP、Research、Persona 都应该继承当前 user scope 约定。
-- Phase 2 是让当前资料检索从本地 hash/关键词路径升级到生产级知识库和 ES 混合检索的关键前置。
-- 图片、图谱、Agent、Research 都依赖更稳定的 source/chunk/indexing 抽象。
+- Phase 2 已经给资料、chunk、检索、聊天和前端工作台建立 knowledge base scope。
+- SourceChunk 和 IndexingRun 已经具备 Phase 3 所需的 embedding/index 状态基础。
+- 图片和文档知识 surfaces 是把当前 parser 能力产品化的下一步，也是补 SourceAsset、详情页和可重试索引体验的自然入口。
+- ES analyzer、自动 projection 写入和 rebuild/backfill CLI 可以作为 Phase 3 的横向收尾穿插完成。
 
-进入 Phase 2 前建议先完成两个短收尾：
+进入 Phase 3 前建议先完成两个短收尾：
 
 - 在 Docker daemon 可用环境中跑完整 compose smoke，包括登录、状态页、资料摄取、搜索和聊天引用。
-- 决定 refresh token/session 续期是否要在 Phase 2 前补齐；如果只面向本地单机开发，可以暂缓。
+- 决定 refresh token/session 续期是否要在共享或生产环境前补齐；如果只面向本地单机开发，可以暂缓。
 
-Phase 2 开发前建议先写独立实施计划：
+Phase 3 开发前建议先写独立实施计划：
 
-- `docs/superpowers/plans/YYYY-MM-DD-lumen-comet-parity-phase-2-knowledgebase-elasticsearch.md`
+- `docs/superpowers/plans/YYYY-MM-DD-lumen-comet-parity-phase-3-image-document-knowledge.md`
 
 计划中必须明确：
 
-- KnowledgeBase、SourceAsset、SourceChunk、IndexingRun 等模型边界。
-- 默认知识库如何接管已有 sources。
-- PostgreSQL canonical 数据与 Elasticsearch projection 的职责分工。
-- embedding provider 选择和 provider profile 能力声明。
-- ES index template、中文 analyzer、BM25/vector 混合排序和 reranker 接入方案。
-- 摄取完成后如何异步写入 ES projection，并支持 rebuild/backfill。
-- 搜索、聊天、引用路径如何继承 user scope 和 knowledge base scope。
-- 检索评测指标、API 测试和前端 smoke 覆盖范围。
+- SourceAsset 模型边界，以及与 Source、SourceChunk、IndexingRun 的关系。
+- 图片 OCR、vision 描述、文档 parse、embedding 和 ES index 的状态流转。
+- Source Detail、Image Library、Document Detail 的前端信息架构。
+- parse/index 失败的可见状态和重试动作。
+- 图片/文档搜索、引用、标签、收藏如何继承 user scope 和 knowledge base scope。
+- ES projection 自动写入、rebuild/backfill CLI 和中文 analyzer 是否在 Phase 3 内补齐。
+- API 测试、前端测试和完整 smoke 覆盖范围。

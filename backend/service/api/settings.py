@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from service.auth import get_current_user
 from service.config import Settings, get_settings
+from service.core.embeddings import EmbeddingProviderConfig, OpenAICompatibleEmbeddingProvider
 from service.core.security import decrypt_secret, redact_text
 from service.core.llm import ChatCompletionError, HttpxChatCompletionClient, resolve_runtime_llm_config
 from service.db import get_db
@@ -108,6 +109,26 @@ def test_provider_profile(
     return _read_profile(profile)
 
 
+@router.post("/provider-profiles/{profile_id}/test-embedding", response_model=LLMProviderProfileRead)
+def test_provider_profile_embedding(
+    profile_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    settings: Settings = Depends(get_settings),
+) -> LLMProviderProfileRead:
+    repo = ProviderProfileRepository(db, user_id=current_user.id)
+    profile = repo.get(profile_id)
+    if profile is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"provider profile {profile_id} not found")
+    try:
+        _test_provider_profile_embedding(profile, settings)
+    except Exception as exc:
+        profile = repo.mark_embedding_test_result(profile_id, "failed", _sanitize_provider_error(exc, profile))
+    else:
+        profile = repo.mark_embedding_test_result(profile_id, "ready", None)
+    return _read_profile(profile)
+
+
 @router.delete("/provider-profiles/{profile_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_provider_profile(
     profile_id: int,
@@ -135,6 +156,13 @@ def _read_profile(profile: LLMProviderProfile) -> LLMProviderProfileRead:
         timeout_seconds=profile.timeout_seconds,
         fallback_enabled=profile.fallback_enabled,
         is_active=profile.is_active,
+        supports_chat=profile.supports_chat,
+        supports_embedding=profile.supports_embedding,
+        embedding_model=profile.embedding_model,
+        embedding_dimensions=profile.embedding_dimensions,
+        embedding_status=profile.embedding_status,
+        embedding_last_error=profile.embedding_last_error,
+        embedding_last_checked_at=profile.embedding_last_checked_at,
         status=profile.status,
         last_error=profile.last_error,
         last_checked_at=profile.last_checked_at,
@@ -156,6 +184,29 @@ def _test_provider_profile(profile: LLMProviderProfile) -> None:
         timeout_seconds=profile.timeout_seconds,
     )
     client.complete([{"role": "user", "content": "请只回复 OK。"}])
+
+
+def _test_provider_profile_embedding(profile: LLMProviderProfile, settings: Settings) -> None:
+    if not profile.supports_embedding:
+        raise ValueError("embedding support is not enabled for this provider profile")
+    if profile.provider != "openai-compatible":
+        raise ValueError(f"unsupported provider: {profile.provider}")
+    api_key = decrypt_secret(profile.api_key)
+    if not api_key:
+        raise ValueError("API key 未配置。")
+    if not profile.embedding_model:
+        raise ValueError("embedding model 未配置。")
+    provider = OpenAICompatibleEmbeddingProvider(
+        EmbeddingProviderConfig(
+            base_url=profile.base_url,
+            model=profile.embedding_model,
+            api_key=api_key,
+            dimensions=profile.embedding_dimensions or settings.embedding_dimensions,
+            batch_size=settings.embedding_batch_size,
+            timeout_seconds=profile.timeout_seconds,
+        )
+    )
+    provider.embed_many(["Lumen embedding smoke"])
 
 
 def _sanitize_provider_error(exc: Exception, profile: LLMProviderProfile) -> str:

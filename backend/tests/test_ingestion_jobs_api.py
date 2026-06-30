@@ -26,6 +26,114 @@ def test_note_submission_creates_source_and_queued_job(client, monkeypatch):
     assert calls == [payload["jobs"][0]["id"]]
 
 
+def test_note_submission_keeps_knowledge_base_on_source_job_and_payload(client, monkeypatch):
+    class FakeAsyncResult:
+        id = "task-kb-note"
+
+    monkeypatch.setattr("service.api.ingestion_jobs.process_ingestion_job.delay", lambda job_id: FakeAsyncResult())
+    kb = client.post("/api/knowledge-bases", json={"name": "Queued KB"}).json()
+
+    response = client.post(
+        "/api/ingestion-jobs/notes",
+        json={
+            "title": "Queued scoped note",
+            "source_type": "note",
+            "content": "Queued scoped content",
+            "knowledge_base_id": kb["id"],
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    source = payload["sources"][0]
+    job = payload["jobs"][0]
+    assert source["knowledge_base_id"] == kb["id"]
+    assert source["knowledge_base_name"] == "Queued KB"
+    assert job["knowledge_base_id"] == kb["id"]
+
+    from service.db import SessionLocal
+    from service.repositories.ingestion_jobs import IngestionJobRepository
+    from service.repositories.sources import SourceRepository
+    from service.core.ingestion import parse_payload
+
+    with SessionLocal() as db:
+        persisted_source = SourceRepository(db).get(source["id"])
+        persisted_job = IngestionJobRepository(db).get(job["id"])
+        assert persisted_source.knowledge_base_id == kb["id"]
+        assert persisted_job.knowledge_base_id == kb["id"]
+        assert parse_payload(persisted_job.payload_json)["knowledge_base_id"] == kb["id"]
+
+
+def test_upload_submission_can_target_knowledge_base(client, monkeypatch):
+    class FakeAsyncResult:
+        id = "task-upload-kb"
+
+    monkeypatch.setattr("service.api.ingestion_jobs.process_ingestion_job.delay", lambda job_id: FakeAsyncResult())
+    kb = client.post("/api/knowledge-bases", json={"name": "Upload KB"}).json()
+
+    response = client.post(
+        f"/api/ingestion-jobs/uploads?knowledge_base_id={kb['id']}",
+        files=[("files", ("scoped.txt", b"Scoped upload", "text/plain"))],
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    source = payload["sources"][0]
+    job = payload["jobs"][0]
+    assert source["knowledge_base_id"] == kb["id"]
+    assert source["knowledge_base_name"] == "Upload KB"
+    assert job["knowledge_base_id"] == kb["id"]
+
+    from service.core.ingestion import parse_payload
+    from service.db import SessionLocal
+    from service.repositories.ingestion_jobs import IngestionJobRepository
+
+    with SessionLocal() as db:
+        persisted_job = IngestionJobRepository(db).get(job["id"])
+        assert parse_payload(persisted_job.payload_json)["knowledge_base_id"] == kb["id"]
+
+
+def test_link_crawl_and_bookmark_submission_can_target_knowledge_base(client, monkeypatch):
+    class FakeAsyncResult:
+        id = "task-non-note-kb"
+
+    monkeypatch.setattr("service.api.ingestion_jobs.process_ingestion_job.delay", lambda job_id: FakeAsyncResult())
+    kb = client.post("/api/knowledge-bases", json={"name": "Capture KB"}).json()
+    html = """
+    <!DOCTYPE NETSCAPE-Bookmark-file-1>
+    <DL><p>
+      <DT><A HREF="https://example.com/bookmark">Bookmark</A>
+    </DL><p>
+    """
+
+    cases = [
+        ("/api/ingestion-jobs/links", {"url": "https://example.com/link", "knowledge_base_id": kb["id"]}),
+        ("/api/ingestion-jobs/crawls", {"url": "https://example.com/crawl", "knowledge_base_id": kb["id"]}),
+        ("/api/ingestion-jobs/bookmarks", {"html_content": html, "knowledge_base_id": kb["id"]}),
+    ]
+
+    from service.core.ingestion import parse_payload
+    from service.db import SessionLocal
+    from service.repositories.ingestion_jobs import IngestionJobRepository
+
+    job_ids = []
+    for url, body in cases:
+        response = client.post(url, json=body)
+        assert response.status_code == 200
+        payload = response.json()
+        source = payload["sources"][0]
+        job = payload["jobs"][0]
+        assert source["knowledge_base_id"] == kb["id"]
+        assert source["knowledge_base_name"] == "Capture KB"
+        assert job["knowledge_base_id"] == kb["id"]
+        job_ids.append(job["id"])
+
+    with SessionLocal() as db:
+        for job_id in job_ids:
+            persisted_job = IngestionJobRepository(db).get(job_id)
+            assert parse_payload(persisted_job.payload_json)["knowledge_base_id"] == kb["id"]
+
+
 def test_upload_submission_creates_one_job_per_file_with_shared_batch(client, monkeypatch):
     class FakeAsyncResult:
         def __init__(self, task_id):
@@ -129,6 +237,32 @@ def test_cancel_running_job_returns_409_and_cancel_queued_succeeds(client, monke
     assert running_cancel.status_code == 409
 
 
+def test_retry_job_rejects_archived_knowledge_base(client, monkeypatch):
+    class FakeAsyncResult:
+        id = "task-archived-retry"
+
+    monkeypatch.setattr("service.api.ingestion_jobs.process_ingestion_job.delay", lambda job_id: FakeAsyncResult())
+    kb = client.post("/api/knowledge-bases", json={"name": "Archived retry KB"}).json()
+    created = client.post(
+        "/api/ingestion-jobs/notes",
+        json={
+            "title": "Retry archived",
+            "source_type": "note",
+            "content": "Retry archived content",
+            "knowledge_base_id": kb["id"],
+        },
+    ).json()
+    job_id = created["jobs"][0]["id"]
+    cancel_response = client.post(f"/api/ingestion-jobs/{job_id}/cancel")
+    assert cancel_response.status_code == 200
+    archived = client.post(f"/api/knowledge-bases/{kb['id']}/archive")
+    assert archived.status_code == 200
+
+    response = client.post(f"/api/ingestion-jobs/{job_id}/retry")
+
+    assert response.status_code == 400
+
+
 def test_broker_unavailable_marks_job_failed_and_returns_503(client, monkeypatch):
     def fail_delay(job_id):
         raise RuntimeError("redis down")
@@ -165,3 +299,13 @@ def test_list_jobs_and_batch_detail(client, monkeypatch):
     assert batch["batch_id"] == batch_id
     assert batch["total"] == 1
     assert batch["queued"] == 1
+
+
+def test_list_jobs_rejects_archived_knowledge_base_filter(client):
+    kb = client.post("/api/knowledge-bases", json={"name": "Archived jobs KB"}).json()
+    archived = client.post(f"/api/knowledge-bases/{kb['id']}/archive")
+    assert archived.status_code == 200
+
+    response = client.get(f"/api/ingestion-jobs?knowledge_base_id={kb['id']}")
+
+    assert response.status_code == 400

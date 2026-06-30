@@ -1,5 +1,6 @@
 import { useCancelIngestionJob, useIngestionJobs, useRetryIngestionJob } from '../api/hooks'
 import type { IngestionJobRead, IngestionJobStatus, IngestionJobType } from '../api/types'
+import { useKnowledgeBaseContext } from '../knowledgeBase/KnowledgeBaseContext'
 
 const statusLabels: Record<IngestionJobStatus, string> = {
   queued: '排队中',
@@ -95,7 +96,8 @@ function JobRow({ job, compact = false }: { job: IngestionJobRead; compact?: boo
 
 export function IngestionProgressPanel({ mode = 'full', onOpenStatus }: IngestionProgressPanelProps) {
   const limit = mode === 'compact' ? 4 : 30
-  const { data: jobs = [] } = useIngestionJobs(limit)
+  const { activeKnowledgeBaseId } = useKnowledgeBaseContext()
+  const { data: jobs = [] } = useIngestionJobs(limit, activeKnowledgeBaseId)
   const counts = countJobs(jobs)
   const activeJobs = jobs.filter((job) => job.status === 'queued' || job.status === 'running')
   const visibleJobs = mode === 'compact' ? activeJobs.slice(0, 4) : jobs

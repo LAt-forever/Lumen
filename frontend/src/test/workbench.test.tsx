@@ -28,6 +28,15 @@ function noContentResponse() {
   } as Response)
 }
 
+function unauthorizedResponse() {
+  return Promise.resolve({
+    ok: false,
+    status: 401,
+    text: () => Promise.resolve('Unauthorized'),
+    json: () => Promise.resolve({ detail: 'Unauthorized' }),
+  } as Response)
+}
+
 function streamResponse(text: string) {
   const encoder = new TextEncoder()
   const stream = new ReadableStream({
@@ -37,6 +46,34 @@ function streamResponse(text: string) {
     },
   })
   return Promise.resolve(new Response(stream, { status: 200, headers: { 'Content-Type': 'text/event-stream' } }))
+}
+
+function deferredStreamResponse() {
+  const encoder = new TextEncoder()
+  let controllerRef: ReadableStreamDefaultController<Uint8Array> | undefined
+  const stream = new ReadableStream({
+    start(controller) {
+      controllerRef = controller
+    },
+  })
+  const push = (text: string) => controllerRef?.enqueue(encoder.encode(text))
+  const close = () => controllerRef?.close()
+  return {
+    response: Promise.resolve(new Response(stream, { status: 200, headers: { 'Content-Type': 'text/event-stream' } })),
+    push,
+    close,
+  }
+}
+
+function deferredRejectedResponse() {
+  let rejectRef: ((reason?: unknown) => void) | undefined
+  const response = new Promise<Response>((_resolve, reject) => {
+    rejectRef = reject
+  })
+  return {
+    response,
+    reject: () => rejectRef?.(new Error('stream failed after switch')),
+  }
 }
 
 describe('Lumen workbench', () => {
@@ -70,7 +107,85 @@ describe('Lumen workbench', () => {
             },
           })
         }
-        if (url.endsWith('/api/sources') && method === 'GET') {
+        if (url.endsWith('/api/knowledge-bases') && method === 'GET') {
+          return jsonResponse([
+            {
+              id: 1,
+              name: '默认知识库',
+              description: '默认收集箱',
+              status: 'active',
+              is_default: true,
+              created_at: '2026-06-05T00:00:00',
+              updated_at: '2026-06-05T00:00:00',
+            },
+            {
+              id: 2,
+              name: '项目知识库',
+              description: '项目资料',
+              status: 'active',
+              is_default: false,
+              created_at: '2026-06-05T00:00:00',
+              updated_at: '2026-06-05T00:00:00',
+            },
+            {
+              id: 3,
+              name: '归档知识库',
+              description: '旧资料',
+              status: 'archived',
+              is_default: false,
+              created_at: '2026-06-05T00:00:00',
+              updated_at: '2026-06-05T00:00:00',
+            },
+          ])
+        }
+        if (url.endsWith('/api/knowledge-bases') && method === 'POST') {
+          return jsonResponse({
+            id: 4,
+            name: '新知识库',
+            description: '新的资料范围',
+            status: 'active',
+            is_default: false,
+            created_at: '2026-06-05T00:00:00',
+            updated_at: '2026-06-05T00:00:00',
+          })
+        }
+        if (url.endsWith('/api/knowledge-bases/2') && method === 'PATCH') {
+          return jsonResponse({
+            id: 2,
+            name: '项目资料库',
+            description: '更新后的项目资料',
+            status: 'active',
+            is_default: false,
+            created_at: '2026-06-05T00:00:00',
+            updated_at: '2026-06-05T00:00:01',
+          })
+        }
+        if (url.endsWith('/api/knowledge-bases/2/archive') && method === 'POST') {
+          return jsonResponse({
+            id: 2,
+            name: '项目知识库',
+            description: '项目资料',
+            status: 'archived',
+            is_default: false,
+            created_at: '2026-06-05T00:00:00',
+            updated_at: '2026-06-05T00:00:01',
+          })
+        }
+        if (url.endsWith('/api/knowledge-bases/3/restore') && method === 'POST') {
+          return jsonResponse({
+            id: 3,
+            name: '归档知识库',
+            description: '旧资料',
+            status: 'active',
+            is_default: false,
+            created_at: '2026-06-05T00:00:00',
+            updated_at: '2026-06-05T00:00:01',
+          })
+        }
+        if (url.endsWith('/api/knowledge-bases/3') && method === 'DELETE') {
+          return noContentResponse()
+        }
+        if ((url.endsWith('/api/sources') || url.includes('/api/sources?')) && method === 'GET') {
           return jsonResponse([
             {
               id: 7,
@@ -166,7 +281,7 @@ describe('Lumen workbench', () => {
             sources: [],
           })
         }
-        if (url.endsWith('/api/ingestion-jobs/uploads') && method === 'POST') {
+        if (url.includes('/api/ingestion-jobs/uploads') && method === 'POST') {
           return jsonResponse({
             batch_id: 'batch-upload',
             total: 1,
@@ -212,6 +327,66 @@ describe('Lumen workbench', () => {
                 source_id: 9,
                 source_title: 'https://example.com/lumen',
                 job_type: 'link',
+                status: 'queued',
+                progress_current: 0,
+                progress_total: 3,
+                message: '已加入队列',
+                error_message: null,
+                created_at: '2026-06-05T00:00:00',
+                updated_at: '2026-06-05T00:00:00',
+                started_at: null,
+                finished_at: null,
+              },
+            ],
+            sources: [],
+          })
+        }
+        if (url.endsWith('/api/ingestion-jobs/crawls') && method === 'POST') {
+          return jsonResponse({
+            batch_id: 'batch-crawl',
+            total: 1,
+            queued: 1,
+            running: 0,
+            succeeded: 0,
+            failed: 0,
+            canceled: 0,
+            jobs: [
+              {
+                id: 104,
+                batch_id: 'batch-crawl',
+                source_id: 10,
+                source_title: 'https://example.com/crawl',
+                job_type: 'crawl',
+                status: 'queued',
+                progress_current: 0,
+                progress_total: 3,
+                message: '已加入队列',
+                error_message: null,
+                created_at: '2026-06-05T00:00:00',
+                updated_at: '2026-06-05T00:00:00',
+                started_at: null,
+                finished_at: null,
+              },
+            ],
+            sources: [],
+          })
+        }
+        if (url.endsWith('/api/ingestion-jobs/bookmarks') && method === 'POST') {
+          return jsonResponse({
+            batch_id: 'batch-bookmark',
+            total: 1,
+            queued: 1,
+            running: 0,
+            succeeded: 0,
+            failed: 0,
+            canceled: 0,
+            jobs: [
+              {
+                id: 105,
+                batch_id: 'batch-bookmark',
+                source_id: 11,
+                source_title: 'Example Bookmark',
+                job_type: 'bookmark',
                 status: 'queued',
                 progress_current: 0,
                 progress_total: 3,
@@ -354,6 +529,13 @@ describe('Lumen workbench', () => {
               timeout_seconds: 12,
               fallback_enabled: true,
               is_active: false,
+              supports_chat: true,
+              supports_embedding: false,
+              embedding_model: null,
+              embedding_dimensions: null,
+              embedding_status: 'untested',
+              embedding_last_error: null,
+              embedding_last_checked_at: null,
               status: 'untested',
               last_error: null,
               last_checked_at: null,
@@ -738,12 +920,19 @@ describe('Lumen workbench', () => {
             base_url: 'https://model.example/v1',
             model: 'gpt-main',
             api_key_configured: true,
-            timeout_seconds: 20,
-            fallback_enabled: true,
-            is_active: false,
-            status: 'untested',
-            last_error: null,
-            last_checked_at: null,
+              timeout_seconds: 20,
+              fallback_enabled: true,
+              is_active: false,
+              supports_chat: true,
+              supports_embedding: true,
+              embedding_model: 'text-embedding-3-small',
+              embedding_dimensions: 1536,
+              embedding_status: 'untested',
+              embedding_last_error: null,
+              embedding_last_checked_at: null,
+              status: 'untested',
+              last_error: null,
+              last_checked_at: null,
             created_at: '2026-06-05T00:00:00',
             updated_at: '2026-06-05T00:00:00',
           })
@@ -756,12 +945,19 @@ describe('Lumen workbench', () => {
             base_url: 'https://backup.example/v1',
             model: 'gpt-backup',
             api_key_configured: true,
-            timeout_seconds: 12,
-            fallback_enabled: true,
-            is_active: false,
-            status: 'ready',
-            last_error: null,
-            last_checked_at: '2026-06-05T00:00:00',
+              timeout_seconds: 12,
+              fallback_enabled: true,
+              is_active: false,
+              supports_chat: true,
+              supports_embedding: false,
+              embedding_model: null,
+              embedding_dimensions: null,
+              embedding_status: 'untested',
+              embedding_last_error: null,
+              embedding_last_checked_at: null,
+              status: 'ready',
+              last_error: null,
+              last_checked_at: '2026-06-05T00:00:00',
             created_at: '2026-06-05T00:00:00',
             updated_at: '2026-06-05T00:00:00',
           })
@@ -774,14 +970,71 @@ describe('Lumen workbench', () => {
             base_url: 'https://backup.example/v1',
             model: 'gpt-backup',
             api_key_configured: true,
-            timeout_seconds: 12,
-            fallback_enabled: true,
-            is_active: true,
-            status: 'ready',
-            last_error: null,
-            last_checked_at: '2026-06-05T00:00:00',
+              timeout_seconds: 12,
+              fallback_enabled: true,
+              is_active: true,
+              supports_chat: true,
+              supports_embedding: false,
+              embedding_model: null,
+              embedding_dimensions: null,
+              embedding_status: 'untested',
+              embedding_last_error: null,
+              embedding_last_checked_at: null,
+              status: 'ready',
+              last_error: null,
+              last_checked_at: '2026-06-05T00:00:00',
             created_at: '2026-06-05T00:00:00',
             updated_at: '2026-06-05T00:00:00',
+          })
+        }
+        if (url.endsWith('/api/settings/provider-profiles/21') && method === 'PATCH') {
+          return jsonResponse({
+            id: 21,
+            name: '备用模型',
+            provider: 'openai-compatible',
+            base_url: 'https://backup.example/v1',
+            model: 'gpt-backup',
+            api_key_configured: true,
+            timeout_seconds: 12,
+            fallback_enabled: true,
+            is_active: false,
+            supports_chat: true,
+            supports_embedding: true,
+            embedding_model: 'text-embedding-3-small',
+            embedding_dimensions: 1536,
+            embedding_status: 'untested',
+            embedding_last_error: null,
+            embedding_last_checked_at: null,
+            status: 'untested',
+            last_error: null,
+            last_checked_at: null,
+            created_at: '2026-06-05T00:00:00',
+            updated_at: '2026-06-05T00:00:01',
+          })
+        }
+        if (url.endsWith('/api/settings/provider-profiles/21/test-embedding') && method === 'POST') {
+          return jsonResponse({
+            id: 21,
+            name: '备用模型',
+            provider: 'openai-compatible',
+            base_url: 'https://backup.example/v1',
+            model: 'gpt-backup',
+            api_key_configured: true,
+            timeout_seconds: 12,
+            fallback_enabled: true,
+            is_active: false,
+            supports_chat: true,
+            supports_embedding: true,
+            embedding_model: 'text-embedding-3-small',
+            embedding_dimensions: 1536,
+            embedding_status: 'ready',
+            embedding_last_error: null,
+            embedding_last_checked_at: '2026-06-05T00:00:00',
+            status: 'untested',
+            last_error: null,
+            last_checked_at: null,
+            created_at: '2026-06-05T00:00:00',
+            updated_at: '2026-06-05T00:00:01',
           })
         }
         if (url.endsWith('/api/chat') && method === 'POST') {
@@ -798,6 +1051,8 @@ describe('Lumen workbench', () => {
                 matched_terms: ['Lumen', '引用'],
                 matched_date: null,
                 match_reason: '匹配关键词：Lumen、引用',
+                retrieval_mode: 'es_hybrid',
+                retrieval_source: 'local_fallback',
               },
             ],
             memories: [],
@@ -816,7 +1071,7 @@ describe('Lumen workbench', () => {
               'data: {"text":"可信回答。"}',
               '',
               'event: final',
-              'data: {"conversation_id":1,"message_id":2,"answer":"带引用的可信回答。","citations":[{"source_id":1,"source_title":"验收笔记","chunk_id":1,"quote":"Lumen 应该引用资料来源。","matched_terms":["Lumen","引用"],"matched_date":null,"match_reason":"匹配关键词：Lumen、引用"}],"memories":[],"confidence":"grounded","answer_mode":"llm","fallback_reason":null}',
+              'data: {"conversation_id":1,"message_id":2,"answer":"带引用的可信回答。","citations":[{"source_id":1,"source_title":"验收笔记","chunk_id":1,"quote":"Lumen 应该引用资料来源。","matched_terms":["Lumen","引用"],"matched_date":null,"match_reason":"匹配关键词：Lumen、引用","retrieval_mode":"es_hybrid","retrieval_source":"local_fallback"}],"memories":[],"confidence":"grounded","answer_mode":"llm","fallback_reason":null}',
               '',
             ].join('\n'),
           )
@@ -834,7 +1089,7 @@ describe('Lumen workbench', () => {
         if (url.endsWith('/api/memories/candidates/2/ignore') && method === 'POST') {
           return jsonResponse({ status: 'ignored' })
         }
-        if (url.endsWith('/api/search?q=link+capture') && method === 'GET') {
+        if (url.includes('/api/search?') && url.includes('q=link+capture') && method === 'GET') {
           return jsonResponse([
             {
               id: 3,
@@ -983,17 +1238,173 @@ describe('Lumen workbench', () => {
     expect(window.localStorage.getItem('lumen.accessToken')).toBe('login-token')
   })
 
+  it('clears cached workbench data and active knowledge base when switching accounts', async () => {
+    const user = userEvent.setup()
+    const defaultFetch = vi.mocked(fetch).getMockImplementation()
+    let resolveSecondSources: ((response: Response) => void) | undefined
+    const secondSourcesResponse = new Promise<Response>((resolve) => {
+      resolveSecondSources = resolve
+    })
+
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      const method = init?.method ?? 'GET'
+      const token = window.localStorage.getItem('lumen.accessToken')
+
+      if (url.endsWith('/api/auth/me') && method === 'GET') {
+        return jsonResponse({
+          id: 1,
+          email: 'first@example.com',
+          is_admin: false,
+          created_at: '2026-06-29T00:00:00',
+        })
+      }
+      if (url.endsWith('/api/auth/logout') && method === 'POST') {
+        return jsonResponse({ status: 'ok' })
+      }
+      if (url.endsWith('/api/auth/login') && method === 'POST') {
+        return jsonResponse({
+          access_token: 'second-token',
+          token_type: 'bearer',
+          user: {
+            id: 2,
+            email: 'second@example.com',
+            is_admin: false,
+            created_at: '2026-06-29T00:00:00',
+          },
+        })
+      }
+      if (url.endsWith('/api/knowledge-bases') && method === 'GET') {
+        return jsonResponse([
+          {
+            id: 1,
+            name: token === 'second-token' ? '第二账户知识库' : '第一账户知识库',
+            description: null,
+            status: 'active',
+            is_default: true,
+            created_at: '2026-06-29T00:00:00',
+            updated_at: '2026-06-29T00:00:00',
+          },
+        ])
+      }
+      if ((url.endsWith('/api/sources') || url.includes('/api/sources?')) && method === 'GET') {
+        if (token === 'second-token') {
+          return secondSourcesResponse
+        }
+        return jsonResponse([
+          {
+            id: 31,
+            title: '第一账户资料',
+            source_type: 'note',
+            status: 'indexed',
+            url: null,
+            filename: null,
+            error_message: null,
+            created_at: '2026-06-29T00:00:00',
+          },
+        ])
+      }
+      return defaultFetch?.(input, init) ?? jsonResponse([])
+    })
+
+    render(<App />)
+
+    expect(await screen.findByText('第一账户资料')).toBeInTheDocument()
+    await user.selectOptions(screen.getByLabelText('知识库'), '1')
+    expect(window.localStorage.getItem('lumen.activeKnowledgeBaseId')).toBe('1')
+
+    await user.click(screen.getByRole('button', { name: '退出登录' }))
+    expect(await screen.findByRole('heading', { name: '登录 Lumen' })).toBeInTheDocument()
+    expect(window.localStorage.getItem('lumen.activeKnowledgeBaseId')).toBeNull()
+
+    await user.type(screen.getByLabelText('邮箱'), 'second@example.com')
+    await user.type(screen.getByLabelText('密码'), 'test-password')
+    await user.click(screen.getByRole('button', { name: '登录' }))
+
+    expect(await screen.findByText('询问或记录')).toBeInTheDocument()
+    expect(screen.queryByText('第一账户资料')).not.toBeInTheDocument()
+    resolveSecondSources?.(
+      new Response(
+        JSON.stringify([
+          {
+            id: 41,
+            title: '第二账户资料',
+            source_type: 'note',
+            status: 'indexed',
+            url: null,
+            filename: null,
+            error_message: null,
+            created_at: '2026-06-29T00:00:00',
+          },
+        ]),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    )
+    expect(await screen.findByText('第二账户资料')).toBeInTheDocument()
+  })
+
+  it('clears session state when an API request returns unauthorized', async () => {
+    const defaultFetch = vi.mocked(fetch).getMockImplementation()
+    window.localStorage.setItem('lumen.activeKnowledgeBaseId', '1')
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      const method = init?.method ?? 'GET'
+      if (url.endsWith('/api/auth/me') && method === 'GET') {
+        return unauthorizedResponse()
+      }
+      return defaultFetch?.(input, init) ?? jsonResponse([])
+    })
+
+    render(<App />)
+
+    expect(await screen.findByRole('heading', { name: '登录 Lumen' })).toBeInTheDocument()
+    expect(window.localStorage.getItem('lumen.accessToken')).toBeNull()
+    expect(window.localStorage.getItem('lumen.activeKnowledgeBaseId')).toBeNull()
+  })
+
   it('sends the bearer token with API requests', async () => {
     render(<App />)
 
     await screen.findByText('询问或记录')
-    const sourceRequest = vi.mocked(fetch).mock.calls.find(([url]) => String(url).endsWith('/api/sources'))
+    const sourceRequest = vi.mocked(fetch).mock.calls.find(([url]) => String(url).includes('/api/sources'))
 
     expect(sourceRequest?.[1]).toEqual(
       expect.objectContaining({
         headers: expect.objectContaining({ Authorization: 'Bearer test-token' }),
       }),
     )
+  })
+
+  it('preserves stored active knowledge base after knowledge bases load', async () => {
+    window.localStorage.setItem('lumen.activeKnowledgeBaseId', '2')
+
+    render(<App />)
+
+    const selector = await screen.findByLabelText('知识库')
+    await waitFor(() => expect(selector).toHaveValue('2'))
+    expect(window.localStorage.getItem('lumen.activeKnowledgeBaseId')).toBe('2')
+    await waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith(
+        'http://127.0.0.1:8000/api/sources?knowledge_base_id=2',
+        expect.objectContaining({ method: 'GET' }),
+      ),
+    )
+    const sourceUrls = vi.mocked(fetch).mock.calls.map(([url]) => String(url)).filter((url) => url.includes('/api/sources'))
+    expect(sourceUrls).not.toContain('http://127.0.0.1:8000/api/sources')
+  })
+
+  it('does not fetch ingestion jobs without a resolved knowledge base on initial load', async () => {
+    render(<App />)
+
+    await screen.findByText('询问或记录')
+    await waitFor(() =>
+      expect(fetch).toHaveBeenCalledWith(
+        'http://127.0.0.1:8000/api/ingestion-jobs?limit=4&knowledge_base_id=1',
+        expect.objectContaining({ method: 'GET' }),
+      ),
+    )
+    const jobUrls = vi.mocked(fetch).mock.calls.map(([url]) => String(url)).filter((url) => url.includes('/api/ingestion-jobs?'))
+    expect(jobUrls).not.toContain('http://127.0.0.1:8000/api/ingestion-jobs?limit=4')
   })
 
   it('renders the workbench and completes the ask and memory review loop', async () => {
@@ -1017,6 +1428,12 @@ describe('Lumen workbench', () => {
     expect(await screen.findByText('验收笔记')).toBeInTheDocument()
     expect(screen.getByText('Lumen 应该引用资料来源。')).toBeInTheDocument()
     expect(screen.getByText('匹配关键词：Lumen、引用')).toBeInTheDocument()
+    expect(screen.getByText('检索：local_fallback')).toBeInTheDocument()
+
+    await user.selectOptions(screen.getByLabelText('知识库'), '2')
+    await waitFor(() => expect(screen.queryByText('带引用的可信回答。')).not.toBeInTheDocument())
+    expect(screen.queryByText('验收笔记')).not.toBeInTheDocument()
+    expect(screen.queryByText('Lumen 应该引用资料来源。')).not.toBeInTheDocument()
 
     await user.click(screen.getAllByRole('button', { name: '确认' })[0])
     await user.click(screen.getAllByRole('button', { name: '忽略' })[1])
@@ -1050,7 +1467,7 @@ describe('Lumen workbench', () => {
     await user.click(screen.getByRole('button', { name: '上传文件' }))
 
     expect(fetch).toHaveBeenCalledWith(
-      'http://127.0.0.1:8000/api/ingestion-jobs/uploads',
+      expect.stringContaining('http://127.0.0.1:8000/api/ingestion-jobs/uploads'),
       expect.objectContaining({ method: 'POST' }),
     )
     expect(await screen.findByText('已加入队列：1 个任务')).toBeInTheDocument()
@@ -1126,7 +1543,7 @@ describe('Lumen workbench', () => {
 
     await waitFor(() =>
       expect(fetch).toHaveBeenCalledWith(
-        'http://127.0.0.1:8000/api/ingestion-jobs/uploads',
+        expect.stringContaining('http://127.0.0.1:8000/api/ingestion-jobs/uploads'),
         expect.objectContaining({ method: 'POST' }),
       ),
     )
@@ -1168,6 +1585,214 @@ describe('Lumen workbench', () => {
     await user.click(screen.getByRole('button', { name: '设为当前' }))
     expect(fetch).toHaveBeenCalledWith(
       'http://127.0.0.1:8000/api/settings/provider-profiles/21/activate',
+      expect.objectContaining({ method: 'POST' }),
+    )
+  })
+
+  it('selects a knowledge base and scopes capture search and chat requests', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await screen.findByText('询问或记录')
+    await user.selectOptions(screen.getByLabelText('知识库'), '2')
+
+    await user.type(screen.getByLabelText('询问 Lumen'), '项目资料怎么引用？')
+    await user.click(screen.getByRole('button', { name: '询问 Lumen' }))
+    await screen.findByText('带引用的可信回答。')
+    expect(fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:8000/api/chat/stream',
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.stringContaining('"knowledge_base_id":2'),
+      }),
+    )
+
+    await user.click(screen.getByRole('button', { name: '添加资料' }))
+    expect(fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:8000/api/ingestion-jobs/notes',
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.stringContaining('"knowledge_base_id":2'),
+      }),
+    )
+
+    await user.click(screen.getByRole('button', { name: '链接' }))
+    await user.type(screen.getByLabelText('网页链接'), 'https://example.com/lumen')
+    await user.click(screen.getByRole('button', { name: '添加链接' }))
+    expect(fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:8000/api/ingestion-jobs/links',
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.stringContaining('"knowledge_base_id":2'),
+      }),
+    )
+
+    await user.click(screen.getByRole('button', { name: '文件' }))
+    const file = new File(['Scoped upload.'], 'scoped-upload.txt', { type: 'text/plain' })
+    await user.upload(screen.getByLabelText('选择资料文件'), file)
+    await user.click(screen.getByRole('button', { name: '上传文件' }))
+    expect(fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:8000/api/ingestion-jobs/uploads?knowledge_base_id=2',
+      expect.objectContaining({ method: 'POST' }),
+    )
+
+    await user.click(screen.getByRole('button', { name: '链接' }))
+    await user.type(screen.getByLabelText('网页链接'), 'https://example.com/crawl')
+    await user.click(screen.getByLabelText('深度抓取（递归抓取同域页面）'))
+    await user.click(screen.getByRole('button', { name: '深度抓取' }))
+    expect(fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:8000/api/ingestion-jobs/crawls',
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.stringContaining('"knowledge_base_id":2'),
+      }),
+    )
+
+    await user.click(screen.getByRole('button', { name: '书签' }))
+    await user.type(screen.getByLabelText('书签 HTML 内容'), '<A HREF="https://example.com/bookmark">Example</A>')
+    await user.click(screen.getByRole('button', { name: '导入书签' }))
+    expect(fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:8000/api/ingestion-jobs/bookmarks',
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.stringContaining('"knowledge_base_id":2'),
+      }),
+    )
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:8000/api/sources?knowledge_base_id=2',
+      expect.objectContaining({ method: 'GET' }),
+    )
+    expect(fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:8000/api/ingestion-jobs?limit=4&knowledge_base_id=2',
+      expect.objectContaining({ method: 'GET' }),
+    )
+
+    await user.click(screen.getByRole('button', { name: '搜索' }))
+    await user.type(screen.getByLabelText('全局搜索'), 'link capture')
+    await user.click(screen.getByRole('button', { name: '执行搜索' }))
+    const globalSearchUrl = vi
+      .mocked(fetch)
+      .mock.calls.map(([url]) => String(url))
+      .find((url) => url.includes('/api/global-search?') && url.includes('q=link+capture'))
+    expect(globalSearchUrl).toContain('knowledge_base_id=2')
+  })
+
+  it('ignores pending stream chunks and final response after switching knowledge base', async () => {
+    const defaultFetch = vi.mocked(fetch).getMockImplementation()
+    const delayedStream = deferredStreamResponse()
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (url.endsWith('/api/chat/stream') && init?.method === 'POST' && String(init.body).includes('切换期间的问题')) {
+        return delayedStream.response
+      }
+      if (!defaultFetch) throw new Error(`Unhandled request: ${url}`)
+      return defaultFetch(input, init)
+    })
+
+    const user = userEvent.setup()
+    render(<App />)
+
+    await screen.findByText('询问或记录')
+    await user.type(screen.getByLabelText('询问 Lumen'), '切换期间的问题')
+    await user.click(screen.getByRole('button', { name: '询问 Lumen' }))
+    expect(await screen.findByText('正在生成回答...')).toBeInTheDocument()
+
+    await user.selectOptions(screen.getByLabelText('知识库'), '2')
+    await waitFor(() => expect(screen.queryByText('正在生成回答...')).not.toBeInTheDocument())
+
+    delayedStream.push(
+      [
+        'event: chunk',
+        'data: {"text":"旧知识库回答"}',
+        '',
+        'event: final',
+        'data: {"conversation_id":1,"message_id":99,"answer":"旧知识库回答","citations":[{"source_id":1,"source_title":"旧知识库资料","chunk_id":1,"quote":"旧引用","matched_terms":[],"matched_date":null,"match_reason":""}],"memories":[],"confidence":"grounded","answer_mode":"llm","fallback_reason":null}',
+        '',
+      ].join('\n'),
+    )
+    delayedStream.close()
+
+    await waitFor(() => expect(screen.queryByText('旧知识库回答')).not.toBeInTheDocument())
+    expect(screen.queryByText('旧知识库资料')).not.toBeInTheDocument()
+    expect(screen.queryByText('旧引用')).not.toBeInTheDocument()
+  })
+
+  it('does not start fallback when a stale stream fails after switching knowledge base', async () => {
+    const defaultFetch = vi.mocked(fetch).getMockImplementation()
+    const delayedFailure = deferredRejectedResponse()
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      if (url.endsWith('/api/chat/stream') && init?.method === 'POST' && String(init.body).includes('失败后切换')) {
+        return delayedFailure.response
+      }
+      if (!defaultFetch) throw new Error(`Unhandled request: ${url}`)
+      return defaultFetch(input, init)
+    })
+
+    const user = userEvent.setup()
+    render(<App />)
+
+    await screen.findByText('询问或记录')
+    await user.type(screen.getByLabelText('询问 Lumen'), '失败后切换')
+    await user.click(screen.getByRole('button', { name: '询问 Lumen' }))
+    expect(await screen.findByText('正在生成回答...')).toBeInTheDocument()
+
+    await user.selectOptions(screen.getByLabelText('知识库'), '2')
+    await waitFor(() => expect(screen.queryByText('正在生成回答...')).not.toBeInTheDocument())
+    delayedFailure.reject()
+
+    await waitFor(() => {
+      const staleFallback = vi
+        .mocked(fetch)
+        .mock.calls.some(([url, init]) => String(url).endsWith('/api/chat') && init?.method === 'POST' && String(init.body).includes('失败后切换'))
+      expect(staleFallback).toBe(false)
+    })
+    expect(screen.queryByText('带引用的可信回答。')).not.toBeInTheDocument()
+    expect(screen.queryByText('验收笔记')).not.toBeInTheDocument()
+  })
+
+  it('saves embedding profile fields from settings', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(screen.getByRole('button', { name: '设置' }))
+    await screen.findByText('备用模型')
+    await user.click(screen.getByRole('button', { name: '编辑' }))
+
+    expect(screen.getByLabelText('支持聊天')).toBeChecked()
+    await user.click(screen.getByLabelText('支持 embedding'))
+    await user.type(screen.getByLabelText('Embedding 模型'), 'text-embedding-3-small')
+    await user.clear(screen.getByLabelText('Embedding 维度'))
+    await user.type(screen.getByLabelText('Embedding 维度'), '1536')
+    await user.click(screen.getByRole('button', { name: '保存模型配置' }))
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:8000/api/settings/provider-profiles/21',
+      expect.objectContaining({
+        method: 'PATCH',
+        body: expect.stringContaining('"supports_embedding":true'),
+      }),
+    )
+    expect(fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:8000/api/settings/provider-profiles/21',
+      expect.objectContaining({
+        method: 'PATCH',
+        body: expect.stringContaining('"embedding_model":"text-embedding-3-small"'),
+      }),
+    )
+    expect(fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:8000/api/settings/provider-profiles/21',
+      expect.objectContaining({
+        method: 'PATCH',
+        body: expect.stringContaining('"embedding_dimensions":1536'),
+      }),
+    )
+
+    await user.click(screen.getByRole('button', { name: '编辑' }))
+    await user.click(screen.getByRole('button', { name: '测试 embedding' }))
+    expect(fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:8000/api/settings/provider-profiles/21/test-embedding',
       expect.objectContaining({ method: 'POST' }),
     )
   })

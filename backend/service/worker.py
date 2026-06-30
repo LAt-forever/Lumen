@@ -11,8 +11,10 @@ from celery.signals import worker_ready
 from service import db as dbmod
 from service.config import Settings
 from service.core.ingestion import IngestionService, parse_payload
+from service.core.runtime_embeddings import build_user_embedding_provider
 from service.repositories.chunks import ChunkRepository
 from service.repositories.ingestion_jobs import IngestionJobRepository
+from service.repositories.indexing_runs import IndexingRunRepository
 from service.repositories.sources import SourceRepository
 from service.schemas import WebCrawlRequest
 
@@ -82,9 +84,10 @@ def run_ingestion_job(job_id: int) -> None:
         if job is None:
             logger.warning("Ingestion job %s not found", job_id)
             return
-        jobs = IngestionJobRepository(db, user_id=job.user_id)
-        sources = SourceRepository(db, user_id=job.user_id)
-        chunks = ChunkRepository(db, user_id=job.user_id)
+        jobs = IngestionJobRepository(db, user_id=job.user_id, knowledge_base_id=job.knowledge_base_id)
+        sources = SourceRepository(db, user_id=job.user_id, knowledge_base_id=job.knowledge_base_id)
+        chunks = ChunkRepository(db, user_id=job.user_id, knowledge_base_id=job.knowledge_base_id)
+        indexing_runs = IndexingRunRepository(db, user_id=job.user_id, knowledge_base_id=job.knowledge_base_id)
         if job.status == "canceled":
             return
         if job.status not in ("queued", "running"):
@@ -96,18 +99,29 @@ def run_ingestion_job(job_id: int) -> None:
                 sources.mark_parsing(job.source_id)
             jobs.update_progress(job.id, 1, job.progress_total, "正在解析资料")
 
-            service = IngestionService(sources, chunks)
+            service = IngestionService(
+                sources,
+                chunks,
+                indexing_runs=indexing_runs,
+                embeddings=build_user_embedding_provider(db, job.user_id, settings),
+            )
             payload = parse_payload(job.payload_json)
             asyncio.run(_dispatch_job(service, job.job_type, job.source_id, payload))
 
             jobs.update_progress(job.id, max(job.progress_total - 1, 1), job.progress_total, "正在建立索引")
             if job.source_id is not None:
-                service.index_existing_source(job.source_id)
-                sources.mark_indexed(job.source_id)
+                service.index_existing_source(job.source_id, job_id=job.id)
             jobs.mark_succeeded(job.id, "索引完成")
         except Exception as exc:
             message = str(exc)
             if job.source_id is not None:
+                try:
+                    for run in indexing_runs.list_for_source(job.source_id):
+                        if run.status in ("queued", "running"):
+                            indexing_runs.mark_failed(run.id, message)
+                            break
+                except Exception:
+                    logger.exception("Could not mark indexing run for source %s failed", job.source_id)
                 try:
                     sources.mark_failed(job.source_id, message)
                 except Exception:

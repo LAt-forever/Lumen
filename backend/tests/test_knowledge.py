@@ -117,3 +117,70 @@ def test_failed_parse_marks_source_failed():
 
     assert source.status == "failed"
     assert source.error_message == "No text content found"
+
+
+class BatchEmbeddingProvider:
+    dimensions = 3
+    profile_id = 42
+    model_name = "text-embedding-test"
+    is_remote = True
+
+    def __init__(self):
+        self.inputs = []
+
+    def embed_many(self, texts):
+        self.inputs.extend(texts)
+        return [[1.0, 0.0, 0.0] for _text in texts]
+
+
+def test_index_source_records_real_embedding_provider_metadata():
+    db = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+    Base.metadata.create_all(db)
+    session = sessionmaker(bind=db)()
+    provider = BatchEmbeddingProvider()
+    service = KnowledgeService(SourceRepository(session), ChunkRepository(session), embeddings=provider)
+    source = service.sources.create(
+        SourceCreate(title="Embedding Note", source_type="note", content="Real embedding metadata should be visible.")
+    )
+
+    service.index_source(source.id)
+
+    chunks = ChunkRepository(session).list_all()
+    runs = service.indexing_runs.list_for_source(source.id)
+    assert provider.inputs == ["Real embedding metadata should be visible."]
+    assert chunks[0].embedding_status == "embedded"
+    assert chunks[0].embedding_provider_profile_id == 42
+    assert chunks[0].embedding_model == "text-embedding-test"
+    assert chunks[0].embedding_dimensions == 3
+    assert chunks[0].index_status == "pending"
+    assert runs[0].embedding_provider_profile_id == 42
+    assert runs[0].embedding_model == "text-embedding-test"
+    assert runs[0].embedding_dimensions == 3
+
+
+class FailingBatchEmbeddingProvider(BatchEmbeddingProvider):
+    def embed_many(self, texts):
+        raise RuntimeError("embedding provider unavailable")
+
+
+def test_index_source_marks_source_failed_when_embedding_provider_fails():
+    db = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+    Base.metadata.create_all(db)
+    session = sessionmaker(bind=db)()
+    service = KnowledgeService(
+        SourceRepository(session),
+        ChunkRepository(session),
+        embeddings=FailingBatchEmbeddingProvider(),
+    )
+    source = service.sources.create(SourceCreate(title="Broken Embedding", source_type="note", content="Needs embedding."))
+
+    try:
+        service.index_source(source.id)
+    except RuntimeError:
+        pass
+
+    session.refresh(source)
+    run = service.indexing_runs.list_for_source(source.id)[0]
+    assert source.status == "failed"
+    assert source.error_message == "embedding provider unavailable"
+    assert run.status == "failed"

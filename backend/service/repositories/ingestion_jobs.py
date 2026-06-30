@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from service.models import IngestionJob
+from service.models import IngestionJob, KnowledgeBase, Source
 
 JOB_STATUSES = ("queued", "running", "succeeded", "failed", "canceled")
 
@@ -15,9 +15,10 @@ def _utcnow() -> datetime:
 
 
 class IngestionJobRepository:
-    def __init__(self, db: Session, user_id: int | None = None):
+    def __init__(self, db: Session, user_id: int | None = None, knowledge_base_id: int | None = None):
         self.db = db
         self.user_id = user_id
+        self.knowledge_base_id = knowledge_base_id
 
     def create(
         self,
@@ -27,9 +28,20 @@ class IngestionJobRepository:
         payload_json: str,
         progress_total: int = 1,
         message: str | None = None,
+        knowledge_base_id: int | None = None,
     ) -> IngestionJob:
+        resolved_knowledge_base_id = self.knowledge_base_id if self.knowledge_base_id is not None else knowledge_base_id
+        if source_id is not None and (self.user_id is not None or resolved_knowledge_base_id is not None):
+            stmt = select(Source.id).where(Source.id == source_id)
+            if self.user_id is not None:
+                stmt = stmt.where(Source.user_id == self.user_id)
+            if resolved_knowledge_base_id is not None:
+                stmt = stmt.where(Source.knowledge_base_id == resolved_knowledge_base_id)
+            if self.db.scalar(stmt) is None:
+                raise ValueError(f"source {source_id} not found")
         job = IngestionJob(
             user_id=self.user_id,
+            knowledge_base_id=resolved_knowledge_base_id,
             job_type=job_type,
             batch_id=batch_id,
             source_id=source_id,
@@ -42,22 +54,43 @@ class IngestionJobRepository:
         self.db.refresh(job)
         return job
 
+    def _attach_source_knowledge_base_names(self, jobs: list[IngestionJob]) -> None:
+        sources = [job.source for job in jobs if job.source is not None]
+        knowledge_base_ids = {source.knowledge_base_id for source in sources if source.knowledge_base_id is not None}
+        names = {}
+        if knowledge_base_ids:
+            rows = self.db.execute(
+                select(KnowledgeBase.id, KnowledgeBase.name).where(KnowledgeBase.id.in_(knowledge_base_ids))
+            )
+            names = {kb_id: name for kb_id, name in rows}
+        for source in sources:
+            source.knowledge_base_name = names.get(source.knowledge_base_id)
+
     def get(self, job_id: int) -> IngestionJob | None:
         stmt = select(IngestionJob).options(selectinload(IngestionJob.source)).where(IngestionJob.id == job_id)
         if self.user_id is not None:
             stmt = stmt.where(IngestionJob.user_id == self.user_id)
-        return self.db.scalars(stmt).first()
+        if self.knowledge_base_id is not None:
+            stmt = stmt.where(IngestionJob.knowledge_base_id == self.knowledge_base_id)
+        job = self.db.scalars(stmt).first()
+        if job is not None:
+            self._attach_source_knowledge_base_names([job])
+        return job
 
     def list_recent(self, status: str | None = None, batch_id: str | None = None, limit: int = 50) -> list[IngestionJob]:
         stmt = select(IngestionJob).options(selectinload(IngestionJob.source))
         if self.user_id is not None:
             stmt = stmt.where(IngestionJob.user_id == self.user_id)
+        if self.knowledge_base_id is not None:
+            stmt = stmt.where(IngestionJob.knowledge_base_id == self.knowledge_base_id)
         if status:
             stmt = stmt.where(IngestionJob.status == status)
         if batch_id:
             stmt = stmt.where(IngestionJob.batch_id == batch_id)
         stmt = stmt.order_by(IngestionJob.created_at.desc(), IngestionJob.id.desc()).limit(limit)
-        return list(self.db.scalars(stmt))
+        jobs = list(self.db.scalars(stmt))
+        self._attach_source_knowledge_base_names(jobs)
+        return jobs
 
     def list_for_batch(self, batch_id: str) -> list[IngestionJob]:
         stmt = (
@@ -68,7 +101,11 @@ class IngestionJobRepository:
         )
         if self.user_id is not None:
             stmt = stmt.where(IngestionJob.user_id == self.user_id)
-        return list(self.db.scalars(stmt))
+        if self.knowledge_base_id is not None:
+            stmt = stmt.where(IngestionJob.knowledge_base_id == self.knowledge_base_id)
+        jobs = list(self.db.scalars(stmt))
+        self._attach_source_knowledge_base_names(jobs)
+        return jobs
 
     def mark_queued(self, job_id: int, celery_task_id: str) -> IngestionJob:
         job = self._required(job_id)
@@ -135,6 +172,8 @@ class IngestionJobRepository:
         stmt = select(IngestionJob).where(IngestionJob.status == "running")
         if self.user_id is not None:
             stmt = stmt.where(IngestionJob.user_id == self.user_id)
+        if self.knowledge_base_id is not None:
+            stmt = stmt.where(IngestionJob.knowledge_base_id == self.knowledge_base_id)
         stmt = stmt.order_by(IngestionJob.id.asc())
         return list(self.db.scalars(stmt))
 
@@ -143,6 +182,8 @@ class IngestionJobRepository:
         stmt = select(IngestionJob)
         if self.user_id is not None:
             stmt = stmt.where(IngestionJob.user_id == self.user_id)
+        if self.knowledge_base_id is not None:
+            stmt = stmt.where(IngestionJob.knowledge_base_id == self.knowledge_base_id)
         for job in self.db.scalars(stmt):
             if job.status in counts:
                 counts[job.status] += 1

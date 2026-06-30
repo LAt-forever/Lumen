@@ -10,11 +10,12 @@ import {
   useUploadIngestionSources,
 } from '../api/hooks'
 import type { ChatResponse, IngestionBatchRead } from '../api/types'
+import { useKnowledgeBaseContext } from '../knowledgeBase/KnowledgeBaseContext'
 
 type CapturePanelProps = {
-  onResponse?: (response: ChatResponse) => void
-  onStreamChunk?: (text: string) => void
-  onStreamStart?: () => void
+  onResponse?: (response: ChatResponse, knowledgeBaseId: number | null, requestId: number) => void
+  onStreamChunk?: (text: string, knowledgeBaseId: number | null, requestId: number) => void
+  onStreamStart?: (knowledgeBaseId: number | null) => number | null
 }
 
 type CaptureMode = 'note' | 'file' | 'link' | 'bookmarks'
@@ -33,8 +34,9 @@ export function CapturePanel({ onResponse, onStreamChunk, onStreamStart }: Captu
   const [bookmarkResult, setBookmarkResult] = useState<IngestionBatchRead | null>(null)
   const [noteResult, setNoteResult] = useState<IngestionBatchRead | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const askLumen = useAskLumen()
-  const askLumenStream = useAskLumenStream()
+  const { activeKnowledgeBaseId } = useKnowledgeBaseContext()
+  const askLumen = useAskLumen(activeKnowledgeBaseId)
+  const askLumenStream = useAskLumenStream(activeKnowledgeBaseId)
   const createSource = useCreateIngestionNote()
   const uploadSources = useUploadIngestionSources()
   const captureLink = useCaptureIngestionLink()
@@ -45,15 +47,19 @@ export function CapturePanel({ onResponse, onStreamChunk, onStreamStart }: Captu
     event.preventDefault()
     const message = draft.trim()
     if (mode === 'note' && message) {
-      onStreamStart?.()
+      const requestId = onStreamStart?.(activeKnowledgeBaseId)
+      if (requestId === undefined || requestId === null) return
       askLumenStream.mutate(
-        { message, onChunk: (text) => onStreamChunk?.(text) },
+        { message, onChunk: (text) => onStreamChunk?.(text, activeKnowledgeBaseId, requestId) },
         {
           onError: () => {
-            onStreamStart?.()
-            askLumen.mutate(message, { onSuccess: (response) => onResponse?.(response) })
+            const fallbackRequestId = onStreamStart?.(activeKnowledgeBaseId)
+            if (fallbackRequestId === undefined || fallbackRequestId === null) return
+            askLumen.mutate(message, {
+              onSuccess: (response) => onResponse?.(response, activeKnowledgeBaseId, fallbackRequestId),
+            })
           },
-          onSuccess: (response) => onResponse?.(response),
+          onSuccess: (response) => onResponse?.(response, activeKnowledgeBaseId, requestId),
         },
       )
     }
@@ -63,7 +69,7 @@ export function CapturePanel({ onResponse, onStreamChunk, onStreamStart }: Captu
     const content = draft.trim()
     if (mode === 'note' && content) {
       createSource.mutate(
-        { title: content.slice(0, 72), source_type: 'note', content },
+        { title: content.slice(0, 72), source_type: 'note', content, knowledge_base_id: activeKnowledgeBaseId },
         {
           onSuccess: (result) => {
             setNoteResult(result)
@@ -95,7 +101,7 @@ export function CapturePanel({ onResponse, onStreamChunk, onStreamStart }: Captu
       fileInputRef.current?.click()
       return
     }
-    uploadSources.mutate(selectedFiles, {
+    uploadSources.mutate({ files: selectedFiles, knowledge_base_id: activeKnowledgeBaseId }, {
       onSuccess: (result) => {
         setUploadResult(result)
         setSelectedFiles([])
@@ -120,18 +126,19 @@ export function CapturePanel({ onResponse, onStreamChunk, onStreamStart }: Captu
           max_depth: crawlDepth,
           max_pages: crawlMaxPages,
           same_domain_only: true,
+          knowledge_base_id: activeKnowledgeBaseId,
         },
         { onSuccess },
       )
     } else {
-      captureLink.mutate(url, { onSuccess })
+      captureLink.mutate({ url, knowledge_base_id: activeKnowledgeBaseId }, { onSuccess })
     }
   }
 
   const handleImportBookmarks = () => {
     const htmlContent = bookmarkHtml.trim()
     if (!htmlContent) return
-    importBookmarks.mutate(htmlContent, {
+    importBookmarks.mutate({ html_content: htmlContent, knowledge_base_id: activeKnowledgeBaseId }, {
       onSuccess: (result) => {
         setBookmarkResult(result)
         setBookmarkHtml('')

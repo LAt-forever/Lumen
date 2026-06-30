@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 SourceStatus = Literal["pending", "parsing", "indexed", "failed"]
 SourceType = Literal["note", "markdown", "text", "pdf", "link", "image", "docx", "epub", "bookmark", "web_crawl"]
+KnowledgeBaseStatus = Literal["active", "archived"]
 MemoryCandidateStatus = Literal["pending", "confirmed", "ignored", "merged"]
 MemoryStatus = Literal["active", "edited", "forgotten", "merged"]
 MemoryType = Literal["preference", "fact", "project", "relationship", "goal", "event", "note"]
@@ -22,6 +23,8 @@ IngestionJobStatus = Literal["queued", "running", "succeeded", "failed", "cancel
 IngestionJobType = Literal["note", "upload", "link", "crawl", "bookmark", "index", "retry"]
 AgentToolName = Literal["global_search", "memory_search", "memory_graph"]
 ServiceHealthStatus = Literal["ok", "degraded", "unavailable", "not_configured"]
+RetrievalMode = Literal["local", "es_bm25", "es_vector", "es_hybrid"]
+RetrievalSource = Literal["elasticsearch", "local", "local_fallback"]
 
 
 class SourceCreate(BaseModel):
@@ -30,6 +33,29 @@ class SourceCreate(BaseModel):
     content: str | None = None
     url: str | None = None
     filename: str | None = None
+    knowledge_base_id: int | None = None
+
+
+class KnowledgeBaseCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=160)
+    description: str | None = None
+
+
+class KnowledgeBaseUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=160)
+    description: str | None = None
+
+
+class KnowledgeBaseRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    description: str | None
+    status: KnowledgeBaseStatus
+    is_default: bool
+    created_at: datetime
+    updated_at: datetime
 
 
 class UserRead(BaseModel):
@@ -59,12 +85,15 @@ class AuthTokenRead(BaseModel):
 
 class LinkCapture(BaseModel):
     url: str = Field(min_length=1, max_length=1000)
+    knowledge_base_id: int | None = None
 
 
 class SourceRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    knowledge_base_id: int | None
+    knowledge_base_name: str | None = None
     title: str
     source_type: str
     status: str
@@ -87,11 +116,14 @@ class ChunkRead(BaseModel):
     matched_terms: list[str] = Field(default_factory=list)
     matched_date: str | None = None
     match_reason: str = ""
+    retrieval_mode: RetrievalMode = "local"
+    retrieval_source: RetrievalSource = "local"
 
 
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1)
     conversation_id: int | None = None
+    knowledge_base_id: int | None = None
 
 
 class CitationRead(BaseModel):
@@ -102,6 +134,8 @@ class CitationRead(BaseModel):
     matched_terms: list[str] = Field(default_factory=list)
     matched_date: str | None = None
     match_reason: str = ""
+    retrieval_mode: RetrievalMode = "local"
+    retrieval_source: RetrievalSource = "local"
 
 
 class UsedMemoryRead(BaseModel):
@@ -264,6 +298,8 @@ class GlobalSearchResultRead(BaseModel):
     matched_terms: list[str] = Field(default_factory=list)
     matched_date: str | None = None
     match_reason: str
+    retrieval_mode: RetrievalMode = "local"
+    retrieval_source: RetrievalSource = "local"
     tags: list[TagRead] = Field(default_factory=list)
     is_favorite: bool = False
     created_at: datetime
@@ -275,6 +311,7 @@ class IngestionJobRead(BaseModel):
     id: int
     batch_id: str
     source_id: int | None
+    knowledge_base_id: int | None
     source_title: str | None = None
     job_type: str
     status: str
@@ -389,6 +426,10 @@ class LLMProviderProfileCreate(BaseModel):
     timeout_seconds: float = Field(default=30.0, gt=0)
     fallback_enabled: bool = True
     is_active: bool = False
+    supports_chat: bool = True
+    supports_embedding: bool = False
+    embedding_model: str | None = Field(default=None, max_length=200)
+    embedding_dimensions: int | None = Field(default=None, ge=1, le=8192)
 
 
 class LLMProviderProfileUpdate(BaseModel):
@@ -397,6 +438,13 @@ class LLMProviderProfileUpdate(BaseModel):
     base_url: str | None = Field(default=None, min_length=1, max_length=1000)
     model: str | None = Field(default=None, min_length=1, max_length=200)
     api_key: str | None = None
+    timeout_seconds: float | None = Field(default=None, gt=0)
+    fallback_enabled: bool | None = None
+    is_active: bool | None = None
+    supports_chat: bool | None = None
+    supports_embedding: bool | None = None
+    embedding_model: str | None = Field(default=None, max_length=200)
+    embedding_dimensions: int | None = Field(default=None, ge=1, le=8192)
     clear_api_key: bool = False
 
 
@@ -509,6 +557,13 @@ class LLMProviderProfileRead(BaseModel):
     timeout_seconds: float
     fallback_enabled: bool
     is_active: bool
+    supports_chat: bool
+    supports_embedding: bool
+    embedding_model: str | None
+    embedding_dimensions: int | None
+    embedding_status: ProviderProfileStatus
+    embedding_last_error: str | None
+    embedding_last_checked_at: datetime | None
     status: ProviderProfileStatus
     last_error: str | None
     last_checked_at: datetime | None
@@ -528,7 +583,9 @@ class WebCrawlRequest(BaseModel):
     max_depth: int = Field(default=2, ge=1, le=3)
     max_pages: int = Field(default=10, ge=1, le=50)
     same_domain_only: bool = True
+    knowledge_base_id: int | None = None
 
 
 class BookmarkImportRequest(BaseModel):
     html_content: str = Field(min_length=1)
+    knowledge_base_id: int | None = None

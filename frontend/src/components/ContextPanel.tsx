@@ -5,6 +5,10 @@ type ContextPanelProps = {
   response?: ChatResponse
 }
 
+function retrievalLabel(citation: ChatResponse['citations'][number]) {
+  return citation.retrieval_source ?? citation.retrieval_mode ?? null
+}
+
 export function ContextPanel({ response }: ContextPanelProps) {
   return (
     <section className="side-panel">
@@ -24,6 +28,7 @@ export function ContextPanel({ response }: ContextPanelProps) {
             <article className="list-row" key={`${citation.source_id}-${citation.chunk_id}`}>
               <strong>{citation.source_title}</strong>
               <p>{citation.quote}</p>
+              {retrievalLabel(citation) ? <p className="helper-text">检索：{retrievalLabel(citation)}</p> : null}
               {citation.match_reason ? <p>{citation.match_reason}</p> : null}
             </article>
           ))}

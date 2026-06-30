@@ -37,5 +37,8 @@ def logout():
 def register(data: RegisterRequest, db: Session = Depends(get_db), settings: Settings = Depends(get_settings)):
     if not settings.registration_enabled:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Registration is disabled")
-    user = create_user(db, data.email, data.password)
+    try:
+        user = create_user(db, data.email, data.password, require_new=True)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email is already registered") from exc
     return _token_response(user, settings)
