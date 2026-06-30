@@ -218,6 +218,22 @@ def test_auto_retrieval_falls_back_to_local_when_elasticsearch_fails():
     assert results[0].retrieval_source == "local_fallback"
 
 
+def test_auto_retrieval_falls_back_to_local_when_elasticsearch_returns_no_candidates():
+    _db, knowledge, chunks = make_service()
+    source = knowledge.sources.create(
+        SourceCreate(title="Empty ES fallback", source_type="note", content="Empty ES should still fallback locally.")
+    )
+    knowledge.index_source(source.id)
+    retrieval = RetrievalService(knowledge=knowledge, chunks=chunks, projection=FakeHybridProjection())
+
+    results = retrieval.search("fallback locally", backend="auto", limit=5)
+
+    assert results
+    assert results[0].source_title == "Empty ES fallback"
+    assert results[0].retrieval_mode == "local"
+    assert results[0].retrieval_source == "local_fallback"
+
+
 def test_auto_retrieval_falls_back_when_vector_search_fails_after_bm25_succeeds():
     _db, knowledge, chunks = make_service()
     scoped_chunk = indexed_chunk(

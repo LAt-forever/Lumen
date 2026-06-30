@@ -53,7 +53,7 @@
 
 2026-06-29 Phase 2 实现后已完成：
 
-- `cd backend && uv run pytest`：268 passed, 1 skipped。
+- `cd backend && uv run pytest`：270 passed, 1 skipped。
 - `cd backend && LUMEN_DATABASE_URL=sqlite:////private/tmp/lumen-phase2-retrieval-eval.db uv run python -m service.eval.retrieval --seed`：4/4 retrieval eval cases passed。
 - `cd frontend && npm test -- --run`：31 passed。
 - `cd frontend && npm run build`：通过。

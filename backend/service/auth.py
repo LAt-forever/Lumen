@@ -41,10 +41,12 @@ def verify_password(password: str, password_hash: str) -> bool:
     return hmac.compare_digest(actual, expected)
 
 
-def create_user(db: Session, email: str, password: str, is_admin: bool = False) -> User:
+def create_user(db: Session, email: str, password: str, is_admin: bool = False, *, require_new: bool = False) -> User:
     normalized = normalize_email(email)
     existing = db.scalar(select(User).where(User.email == normalized))
     if existing is not None:
+        if require_new:
+            raise ValueError("user already exists")
         return existing
     user = User(email=normalized, password_hash=hash_password(password), is_admin=is_admin)
     db.add(user)

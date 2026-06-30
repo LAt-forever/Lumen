@@ -366,7 +366,7 @@ LUMEN_RETRIEVAL_BM25_WEIGHT=1.0
 LUMEN_RETRIEVAL_VECTOR_WEIGHT=1.0
 ```
 
-`auto` 模式会优先使用 Elasticsearch source chunk projection 做 BM25/vector 混合检索，并在 ES 或 query embedding 失败时回退到本地检索。`local` 会强制使用本地检索，`elasticsearch` 会直接暴露 ES/embedding 错误，适合调试索引和检索配置。
+`auto` 模式会优先使用 Elasticsearch source chunk projection 做 BM25/vector 混合检索，并在 ES、query embedding 失败或当前 scope 没有 ES 候选时回退到本地检索。`local` 会强制使用本地检索，`elasticsearch` 会直接暴露 ES/embedding 错误，适合调试索引和检索配置。
 
 ## 使用流程
 

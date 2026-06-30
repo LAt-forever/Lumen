@@ -81,6 +81,8 @@ class RetrievalService:
                 results = self._elasticsearch_candidates(query, limit)
             except Exception:
                 return self._local(query, limit, retrieval_source="local_fallback")
+            if not results:
+                return self._local(query, limit, retrieval_source="local_fallback")
             return self._maybe_rerank(query, results)[:limit]
         if selected_backend == "elasticsearch":
             results = self._elasticsearch_candidates(query, limit)
