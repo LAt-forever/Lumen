@@ -100,6 +100,29 @@ class ChunkRepository:
             )
         return len(list(self.db.scalars(stmt)))
 
+    def list_for_source(self, source_id: int) -> list[SourceChunk]:
+        stmt = select(SourceChunk).options(joinedload(SourceChunk.source)).join(Source).where(SourceChunk.source_id == source_id)
+        if self.user_id is not None:
+            stmt = stmt.where(Source.user_id == self.user_id, SourceChunk.user_id == self.user_id)
+        if self.knowledge_base_id is not None:
+            stmt = stmt.where(
+                Source.knowledge_base_id == self.knowledge_base_id,
+                SourceChunk.knowledge_base_id == self.knowledge_base_id,
+            )
+        return list(self.db.scalars(stmt.order_by(SourceChunk.chunk_index.asc(), SourceChunk.id.asc())))
+
+    def mark_index_status_for_source(self, source_id: int, status: str, error_message: str | None = None) -> None:
+        if self._source(source_id) is None:
+            raise ValueError(f"source {source_id} not found")
+        indexed_at = datetime.now(UTC).replace(tzinfo=None) if status == "indexed" else None
+        rows = self.list_for_source(source_id)
+        for row in rows:
+            row.index_status = status
+            row.index_error = error_message
+            row.indexed_at = indexed_at
+        if rows:
+            self.db.commit()
+
     def delete_for_source(self, source_id: int) -> None:
         source = self._source(source_id)
         if source is None:

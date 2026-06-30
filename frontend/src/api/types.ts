@@ -49,6 +49,40 @@ export type SourceRead = {
   created_at: string
 }
 
+export type SourceAssetRead = {
+  id: number
+  source_id: number
+  knowledge_base_id: number | null
+  asset_type: string
+  filename: string
+  mime_type: string | null
+  byte_size: number
+  storage_path: string | null
+  parse_status: string
+  parse_error: string | null
+  embedding_status: string
+  embedding_error: string | null
+  index_status: string
+  index_error: string | null
+  graph_status: string
+  graph_error: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type SourceIndexingRunRead = {
+  id: number
+  run_type: string
+  status: string
+  chunks_total: number
+  chunks_embedded: number
+  chunks_indexed: number
+  error_message: string | null
+  started_at: string | null
+  finished_at: string | null
+  created_at: string
+}
+
 export interface BulkUploadResult {
   total: number
   succeeded: number
@@ -58,6 +92,20 @@ export interface BulkUploadResult {
 
 export type SourceDetailRead = SourceRead & {
   chunk_count: number
+  assets: SourceAssetRead[]
+  embedding_status: string
+  index_status: string
+  graph_status: string
+  indexing_runs: SourceIndexingRunRead[]
+  tags: TagRead[]
+  is_favorite: boolean
+  can_retry: boolean
+}
+
+export type SourceImageRead = SourceRead & {
+  asset: SourceAssetRead
+  tags: TagRead[]
+  is_favorite: boolean
 }
 
 export type IngestionJobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'canceled'

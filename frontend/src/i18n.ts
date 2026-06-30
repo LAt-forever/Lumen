@@ -21,6 +21,16 @@ const sourceStatusLabels: Record<string, string> = {
   failed: '解析失败',
 }
 
+const knowledgePipelineStatusLabels: Record<string, string> = {
+  pending: '待处理',
+  parsing: '解析中',
+  parsed: '已解析',
+  embedded: '已向量化',
+  indexed: '已索引',
+  skipped: '已跳过',
+  failed: '失败',
+}
+
 const suggestedActionLabels: Record<string, string> = {
   'Add a source to begin.': '添加一条资料开始使用。',
   'Confirm a memory so Lumen can personalize future answers.': '确认一条记忆，让 Lumen 在后续回答中更贴合你。',
@@ -37,6 +47,10 @@ export function formatMemoryType(value: string) {
 
 export function formatSourceStatus(value: string) {
   return sourceStatusLabels[value] ?? value
+}
+
+export function formatKnowledgePipelineStatus(value: string) {
+  return knowledgePipelineStatusLabels[value] ?? value
 }
 
 export function formatSuggestedAction(value: string) {

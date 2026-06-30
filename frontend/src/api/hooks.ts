@@ -32,6 +32,7 @@ import type {
   RerankerProfileCreate,
   RerankerProfileRead,
   SourceDetailRead,
+  SourceImageRead,
   SourceRead,
   StatusSummaryRead,
   TagAssignmentRead,
@@ -54,6 +55,7 @@ function useKnowledgeBaseMutation<TInput>(mutationFn: (input: TInput) => Promise
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['knowledge-bases'] })
       await queryClient.invalidateQueries({ queryKey: ['sources'] })
+      await queryClient.invalidateQueries({ queryKey: ['source-images'] })
       await queryClient.invalidateQueries({ queryKey: ['ingestion-jobs'] })
       await queryClient.invalidateQueries({ queryKey: ['search'] })
       await queryClient.invalidateQueries({ queryKey: ['global-search'] })
@@ -100,6 +102,14 @@ export function useSourceDetail(sourceId?: number) {
   })
 }
 
+export function useImageSources(knowledgeBaseId?: number | null) {
+  return useQuery<SourceImageRead[]>({
+    queryKey: ['source-images', knowledgeBaseId ?? 'default'],
+    queryFn: () => api.listImages(knowledgeBaseId),
+    enabled: knowledgeBaseId !== null,
+  })
+}
+
 export function useCreateSource() {
   const queryClient = useQueryClient()
   return useMutation({
@@ -117,6 +127,7 @@ function invalidateIngestionDependents(queryClient: ReturnType<typeof useQueryCl
   return Promise.all([
     queryClient.invalidateQueries({ queryKey: ['ingestion-jobs'] }),
     queryClient.invalidateQueries({ queryKey: ['sources'] }),
+    queryClient.invalidateQueries({ queryKey: ['source-images'] }),
     queryClient.invalidateQueries({ queryKey: ['review'] }),
     queryClient.invalidateQueries({ queryKey: ['status'] }),
     queryClient.invalidateQueries({ queryKey: ['search'] }),
@@ -198,6 +209,10 @@ export function useRetryIngestionJob() {
   })
 }
 
+export function useRefreshSource() {
+  return useIngestionSubmitMutation<number>(api.refreshSource)
+}
+
 async function indexIfPending(source: SourceRead) {
   if (source.status === 'pending') {
     await api.indexSource(source.id)
@@ -211,6 +226,7 @@ function useSourceCaptureMutation<TInput>(mutationFn: (input: TInput) => Promise
     onSuccess: async (source) => {
       await indexIfPending(source)
       await queryClient.invalidateQueries({ queryKey: ['sources'] })
+      await queryClient.invalidateQueries({ queryKey: ['source-images'] })
       await queryClient.invalidateQueries({ queryKey: ['review'] })
     },
   })
@@ -224,6 +240,7 @@ export function useUploadSources() {
       const pending = result.sources.filter((s) => s.status === 'pending')
       await Promise.all(pending.map((s) => api.indexSource(s.id)))
       await queryClient.invalidateQueries({ queryKey: ['sources'] })
+      await queryClient.invalidateQueries({ queryKey: ['source-images'] })
       await queryClient.invalidateQueries({ queryKey: ['review'] })
     },
   })
@@ -239,6 +256,7 @@ export function useUploadSource() {
     onSuccess: async (source: SourceRead) => {
       await indexIfPending(source)
       await queryClient.invalidateQueries({ queryKey: ['sources'] })
+      await queryClient.invalidateQueries({ queryKey: ['source-images'] })
       await queryClient.invalidateQueries({ queryKey: ['review'] })
     },
   })
@@ -263,6 +281,7 @@ export function useImportBookmarks() {
     mutationFn: api.importBookmarks,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['sources'] })
+      await queryClient.invalidateQueries({ queryKey: ['source-images'] })
       await queryClient.invalidateQueries({ queryKey: ['review'] })
     },
   })
@@ -274,6 +293,7 @@ export function useIndexSource() {
     mutationFn: api.indexSource,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['sources'] })
+      await queryClient.invalidateQueries({ queryKey: ['source-images'] })
       await queryClient.invalidateQueries({ queryKey: ['review'] })
     },
   })
@@ -285,6 +305,7 @@ export function useRetrySource() {
     mutationFn: api.retrySource,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['sources'] })
+      await queryClient.invalidateQueries({ queryKey: ['source-images'] })
       await queryClient.invalidateQueries({ queryKey: ['source'] })
       await queryClient.invalidateQueries({ queryKey: ['global-search'] })
       await queryClient.invalidateQueries({ queryKey: ['status'] })
@@ -298,6 +319,7 @@ export function useDeleteSource() {
     mutationFn: api.deleteSource,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['sources'] })
+      await queryClient.invalidateQueries({ queryKey: ['source-images'] })
       await queryClient.invalidateQueries({ queryKey: ['search'] })
       await queryClient.invalidateQueries({ queryKey: ['review'] })
     },

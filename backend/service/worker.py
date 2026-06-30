@@ -106,10 +106,10 @@ def run_ingestion_job(job_id: int) -> None:
                 embeddings=build_user_embedding_provider(db, job.user_id, settings),
             )
             payload = parse_payload(job.payload_json)
-            asyncio.run(_dispatch_job(service, job.job_type, job.source_id, payload))
+            should_index = asyncio.run(_dispatch_job(service, job.job_type, job.source_id, payload))
 
             jobs.update_progress(job.id, max(job.progress_total - 1, 1), job.progress_total, "正在建立索引")
-            if job.source_id is not None:
+            if job.source_id is not None and should_index:
                 service.index_existing_source(job.source_id, job_id=job.id)
             jobs.mark_succeeded(job.id, "索引完成")
         except Exception as exc:
@@ -134,20 +134,20 @@ async def _dispatch_job(
     job_type: str,
     source_id: int | None,
     payload: dict,
-) -> None:
+) -> bool:
     if source_id is None:
         raise ValueError("Ingestion job is missing source_id")
     if job_type == "note":
         source = service._source(source_id)
         if not (source.content or "").strip():
             raise ValueError("No text content found")
-        return
+        return True
     if job_type == "upload":
         await service.parse_existing_source(source_id)
-        return
+        return True
     if job_type == "link":
         await service.parse_link_source(source_id)
-        return
+        return True
     if job_type == "crawl":
         request = WebCrawlRequest(
             url=str(payload.get("url") or ""),
@@ -156,11 +156,11 @@ async def _dispatch_job(
             same_domain_only=bool(payload.get("same_domain_only", True)),
         )
         await service.parse_crawl_source(source_id, request)
-        return
+        return True
     if job_type == "bookmark":
         await service.parse_bookmark_source(source_id)
-        return
+        return True
     if job_type in ("index", "retry"):
         await service.retry_source(source_id)
-        return
+        return False
     raise ValueError(f"Unsupported ingestion job type: {job_type}")

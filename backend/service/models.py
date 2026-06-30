@@ -49,7 +49,34 @@ class Source(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
 
     chunks: Mapped[list["SourceChunk"]] = relationship(back_populates="source", cascade="all, delete-orphan")
+    assets: Mapped[list["SourceAsset"]] = relationship(back_populates="source", cascade="all, delete-orphan")
     ingestion_jobs: Mapped[list["IngestionJob"]] = relationship(back_populates="source")
+
+
+class SourceAsset(Base):
+    __tablename__ = "source_assets"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source_id: Mapped[int] = mapped_column(ForeignKey("sources.id"), nullable=False, index=True)
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    knowledge_base_id: Mapped[Optional[int]] = mapped_column(ForeignKey("knowledge_bases.id"), nullable=True, index=True)
+    asset_type: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    filename: Mapped[str] = mapped_column(String(500), nullable=False)
+    mime_type: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    byte_size: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    storage_path: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+    parse_status: Mapped[str] = mapped_column(String(40), default="pending", nullable=False, index=True)
+    parse_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    embedding_status: Mapped[str] = mapped_column(String(40), default="pending", nullable=False, index=True)
+    embedding_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    index_status: Mapped[str] = mapped_column(String(40), default="pending", nullable=False, index=True)
+    index_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    graph_status: Mapped[str] = mapped_column(String(40), default="pending", nullable=False, index=True)
+    graph_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    source: Mapped[Source] = relationship(back_populates="assets")
 
 
 class SourceChunk(Base):

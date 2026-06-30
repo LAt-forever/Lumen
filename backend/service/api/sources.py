@@ -12,6 +12,9 @@ from service.db import get_db
 from service.models import Source, User
 from service.repositories.chunks import ChunkRepository
 from service.repositories.knowledge_bases import KnowledgeBaseRepository
+from service.repositories.indexing_runs import IndexingRunRepository
+from service.repositories.organization import OrganizationRepository
+from service.repositories.source_assets import SourceAssetRepository
 from service.repositories.sources import SourceRepository
 from service.schemas import (
     BookmarkImportRequest,
@@ -19,6 +22,7 @@ from service.schemas import (
     LinkCapture,
     SourceCreate,
     SourceDetailRead,
+    SourceImageRead,
     SourceRead,
     WebCrawlRequest,
 )
@@ -62,7 +66,43 @@ def _failed_source(sources: SourceRepository, data: SourceCreate, message: str):
     return refreshed
 
 
+def _summary_status(statuses: list[str], *, empty_status: str) -> str:
+    if not statuses:
+        return empty_status
+    unique = set(statuses)
+    if "failed" in unique:
+        return "failed"
+    if len(unique) == 1:
+        return statuses[0]
+    if "pending" in unique:
+        return "pending"
+    return statuses[0]
+
+
+def _empty_index_status(source: Source) -> str:
+    if source.status == "failed":
+        return "failed"
+    return "pending"
+
+
 def _source_detail(source, db: Session, user_id: int | None = None) -> SourceDetailRead:
+    chunks = ChunkRepository(db, user_id=user_id, knowledge_base_id=source.knowledge_base_id).list_for_source(source.id)
+    assets = SourceAssetRepository(db, user_id=user_id, knowledge_base_id=source.knowledge_base_id).list_for_source(source.id)
+    runs = IndexingRunRepository(db, user_id=user_id, knowledge_base_id=source.knowledge_base_id).list_for_source(source.id)
+    organization = OrganizationRepository(db, user_id=user_id)
+    tags = [assignment.tag for assignment in organization.assignments_for_target("source", source.id)]
+    embedding_status = _summary_status(
+        [chunk.embedding_status for chunk in chunks],
+        empty_status=_empty_index_status(source),
+    )
+    index_status = _summary_status(
+        [chunk.index_status for chunk in chunks],
+        empty_status=_empty_index_status(source),
+    )
+    has_failed_asset = any(
+        asset.parse_status == "failed" or asset.embedding_status == "failed" or asset.index_status == "failed" for asset in assets
+    )
+    has_failed_run = any(run.status == "failed" for run in runs)
     return SourceDetailRead.model_validate(
         {
             "id": source.id,
@@ -75,9 +115,37 @@ def _source_detail(source, db: Session, user_id: int | None = None) -> SourceDet
             "created_at": source.created_at,
             "knowledge_base_id": source.knowledge_base_id,
             "knowledge_base_name": getattr(source, "knowledge_base_name", None),
-            "chunk_count": ChunkRepository(
-                db, user_id=user_id, knowledge_base_id=source.knowledge_base_id
-            ).count_for_source(source.id),
+            "chunk_count": len(chunks),
+            "assets": assets,
+            "embedding_status": embedding_status,
+            "index_status": index_status,
+            "graph_status": "pending",
+            "indexing_runs": runs,
+            "tags": tags,
+            "is_favorite": organization.is_favorite("source", source.id),
+            "can_retry": source.status == "failed" or has_failed_asset or has_failed_run,
+        }
+    )
+
+
+def _source_image(source: Source, asset, db: Session, user_id: int | None = None) -> SourceImageRead:
+    organization = OrganizationRepository(db, user_id=user_id)
+    tags = [assignment.tag for assignment in organization.assignments_for_target("source", source.id)]
+    return SourceImageRead.model_validate(
+        {
+            "id": source.id,
+            "title": source.title,
+            "source_type": source.source_type,
+            "status": source.status,
+            "url": source.url,
+            "filename": source.filename,
+            "error_message": source.error_message,
+            "created_at": source.created_at,
+            "knowledge_base_id": source.knowledge_base_id,
+            "knowledge_base_name": getattr(source, "knowledge_base_name", None),
+            "asset": asset,
+            "tags": tags,
+            "is_favorite": organization.is_favorite("source", source.id),
         }
     )
 
@@ -92,6 +160,7 @@ def _ingestion_service(
     return IngestionService(
         scoped_sources,
         _chunk_repo(db, current_user, knowledge_base_id),
+        source_assets=SourceAssetRepository(db, user_id=current_user.id, knowledge_base_id=knowledge_base_id),
         embeddings=build_user_embedding_provider(db, current_user.id),
     )
 
@@ -130,7 +199,7 @@ async def upload_source(
             failed += 1
             continue
         try:
-            source = await service.create_and_index_upload(filename, await file.read())
+            source = await service.create_and_index_upload(filename, await file.read(), mime_type=file.content_type)
             result_sources.append(source)
             if source.status == "failed":
                 failed += 1
@@ -195,6 +264,17 @@ def list_sources(
 ):
     knowledge_base = _active_knowledge_base(db, current_user, knowledge_base_id)
     return _source_repo(db, current_user, knowledge_base.id).list()
+
+
+@router.get("/images", response_model=list[SourceImageRead])
+def list_images(
+    knowledge_base_id: int | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    knowledge_base = _active_knowledge_base(db, current_user, knowledge_base_id)
+    rows = SourceAssetRepository(db, user_id=current_user.id, knowledge_base_id=knowledge_base.id).list_images()
+    return [_source_image(source, asset, db, current_user.id) for source, asset in rows]
 
 
 @router.get("/{source_id}", response_model=SourceDetailRead)

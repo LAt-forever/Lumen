@@ -133,12 +133,25 @@ class BatchEmbeddingProvider:
         return [[1.0, 0.0, 0.0] for _text in texts]
 
 
+class RecordingProjection:
+    def __init__(self):
+        self.ensure_calls = 0
+        self.documents = []
+
+    def ensure_index(self):
+        self.ensure_calls += 1
+
+    def index_chunk(self, document):
+        self.documents.append(document)
+
+
 def test_index_source_records_real_embedding_provider_metadata():
     db = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
     Base.metadata.create_all(db)
     session = sessionmaker(bind=db)()
     provider = BatchEmbeddingProvider()
-    service = KnowledgeService(SourceRepository(session), ChunkRepository(session), embeddings=provider)
+    projection = RecordingProjection()
+    service = KnowledgeService(SourceRepository(session), ChunkRepository(session), embeddings=provider, projection=projection)
     source = service.sources.create(
         SourceCreate(title="Embedding Note", source_type="note", content="Real embedding metadata should be visible.")
     )
@@ -152,10 +165,13 @@ def test_index_source_records_real_embedding_provider_metadata():
     assert chunks[0].embedding_provider_profile_id == 42
     assert chunks[0].embedding_model == "text-embedding-test"
     assert chunks[0].embedding_dimensions == 3
-    assert chunks[0].index_status == "pending"
+    assert chunks[0].index_status == "indexed"
     assert runs[0].embedding_provider_profile_id == 42
     assert runs[0].embedding_model == "text-embedding-test"
     assert runs[0].embedding_dimensions == 3
+    assert runs[0].chunks_indexed == 1
+    assert projection.ensure_calls == 1
+    assert [document.chunk_id for document in projection.documents] == [chunks[0].id]
 
 
 class FailingBatchEmbeddingProvider(BatchEmbeddingProvider):

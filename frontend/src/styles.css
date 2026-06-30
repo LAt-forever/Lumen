@@ -659,6 +659,61 @@ p {
   margin-top: 8px;
 }
 
+.status-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  border: 1px solid #d4ded8;
+  border-radius: 8px;
+  background: #f7faf8;
+  color: #52635b;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 7px;
+}
+
+.status-parsed,
+.status-embedded,
+.status-indexed,
+.status-succeeded {
+  border-color: #bad7c7;
+  background: #edf7f0;
+  color: #236b47;
+}
+
+.status-failed {
+  border-color: #efc5bc;
+  background: #fff0ed;
+  color: #a33b2b;
+}
+
+.status-running,
+.status-parsing {
+  border-color: #c9d7ef;
+  background: #f0f5ff;
+  color: #2f5f9f;
+}
+
+.asset-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.asset-row {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+  padding: 9px;
+}
+
 .tag-row {
   display: flex;
   flex-wrap: wrap;

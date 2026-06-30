@@ -1,6 +1,6 @@
 # Comet 对标未完成事项追踪
 
-更新日期：2026-06-29
+更新日期：2026-06-30
 
 本文档用于后续继续开发时快速判断“还没做什么”。继续推进 Comet 对标前，优先读取本文档，再按对应阶段去看详细规格和实施计划。
 
@@ -15,12 +15,13 @@
 
 ## 当前开发状态
 
-- Phase 0 运行栈基础已落地，仍需在 Docker daemon 可用环境中完成完整 compose smoke。
+- Phase 0 运行栈基础已落地并已合并到远端 `main`，仍需在 Docker daemon 可用环境中完成完整 compose smoke。
 - Phase 1 认证、用户与数据隔离已完成并已合并。
-- Phase 2 知识库、embedding profile、ES projection、hybrid retrieval、搜索/聊天切换和前端知识库工作台已完成第一版实现。
-- 当前认证策略为邮箱密码登录 + JWT access token + bootstrap 用户 + 前端登出清理 token。
+- Phase 2 知识库、embedding profile、ES projection、hybrid retrieval、搜索/聊天切换和前端知识库工作台已完成第一版实现、review 修复、最终验证与远端推送；当前远端 `main` 尚未包含 Phase 2 分支 HEAD。
+- 当前认证策略为邮箱密码登录 + JWT access token + bootstrap 用户 + 前端登出清理 token；前端已在登出、401 和账号切换时清空会话相关缓存。
 - refresh token 或 session 续期策略尚未实现，进入共享或生产环境前需要单独决策。
-- 下一轮主线建议进入 Phase 3：图片与文档知识 surfaces，补齐 asset 状态、详情页和可重试索引体验。
+- Phase 3 图片与文档知识 surfaces 已完成第一版：新增 Image Library、SourceAsset 元数据/状态、图片解析文本检索与聊天引用验证、remote embedding 后自动写 ES projection、失败状态可见与重试、网页资料刷新任务，以及标签/收藏详情测试。
+- 图谱同步在 Phase 3 只提供状态面；真实 Neo4j projection 和 provenance 同步仍归入 Phase 4。
 
 ## 当前已完成的基础
 
@@ -38,6 +39,7 @@
 - Provider profile 已支持 embedding 能力、OpenAI-compatible embedding 测试和 active embedding 索引接线。
 - SourceChunk 和 IndexingRun 已记录 embedding/index 状态、user scope 和 knowledge base scope。
 - Elasticsearch source chunk projection、BM25/vector 检索、RRF 混合排序、reranker hook 和 local fallback 已接入 RetrievalService。
+- Phase 2 final review 修复已补齐跨知识库批量改名/删除防护、资料详情知识库一致性检查、非默认知识库搜索测试和前端会话缓存清理。
 - 后端、前端测试和前端构建已通过。
 
 ## 最新验证记录
@@ -61,10 +63,24 @@
 - `docker compose config --services`：通过，服务包含 `elasticsearch`、`neo4j`、`postgres`、`redis`、`backend`、`worker`、`beat`、`frontend`。
 - `docker compose up --build -d`：未完成；本机 Docker daemon 未运行，原始错误为 `unable to get image 'neo4j:5-community': Cannot connect to the Docker daemon at unix:///Users/lanhezheng/.docker/run/docker.sock. Is the docker daemon running?`。
 
+2026-06-30 Phase 2 推送与合并状态已确认：
+
+- `git fetch origin` 后，`origin/main` 更新到 `c909125`，包含 Phase 0 PR #2 和 Phase 1 PR #3。
+- 当前 Phase 2 分支 HEAD 为 `d63a6f4`，已推送到 `origin/codex/comet-parity-phase-2-knowledgebase-es-retrieval`。
+- `git branch -r --contains HEAD` 仅显示 Phase 2 feature branch，说明 `origin/main` 尚未包含 Phase 2 HEAD。
+- 本机 GitHub CLI 未登录，PR 是否已创建需在 GitHub UI 或已认证 CLI 中确认。
+
+2026-06-30 Phase 3 实现后已完成：
+
+- `cd backend && uv run pytest`：278 passed, 1 skipped。
+- `cd frontend && npm test -- --run`：35 passed。
+- `cd frontend && npm run build`：通过。
+- `cd backend && LUMEN_DATABASE_URL=sqlite:////private/tmp/lumen-phase3-final-alembic.db uv run alembic -c alembic.ini upgrade head`：通过。
+
 ## Phase 0 剩余收尾
 
-- [ ] 确认 PR 已创建并合并到远端 `main`。
-- [ ] 确认远端 `origin/main` 已包含 Phase 0 提交。
+- [x] 确认 PR 已创建并合并到远端 `main`。
+- [x] 确认远端 `origin/main` 已包含 Phase 0 提交。
 - [ ] 在 Docker daemon 可用的环境中运行 `docker compose up --build`。
 - [ ] 用完整 compose 栈 smoke 验证：
   - [ ] PostgreSQL 正常。
@@ -107,6 +123,13 @@
 
 目标：引入多知识库、真实 embedding 和 ES 混合检索，替换当前 hash embedding 和本地关键词排序。
 
+收尾状态：
+
+- [x] Phase 2 implementation branch 已推送到 `origin/codex/comet-parity-phase-2-knowledgebase-es-retrieval`。
+- [ ] 确认 GitHub PR 已创建。
+- [ ] 合并 Phase 2 PR 到远端 `main`。
+- [ ] 合并后确认 `origin/main` 已包含 Phase 2 变更；如果使用 squash merge，以对应 squash commit 为准。
+
 - [x] 新增 KnowledgeBase 模型。
 - [x] 新增知识库创建、重命名、归档、恢复和删除空知识库 API。
 - [x] 前端新增知识库选择器和知识库页面。
@@ -117,7 +140,7 @@
 - [x] 新增 Elasticsearch source chunk projection mapping。
 - [ ] 决定本地 ES 中文 analyzer 配置。
 - [x] 新增 ES projection service。
-- [ ] 摄取完成后自动写入 ES 搜索投影；当前已有 projection service 和 rebuild helper，自动写入仍需后续接线。
+- [x] 摄取完成后自动写入 ES 搜索投影；remote embedding 成功后会尝试写入 Elasticsearch projection，失败时 source/chunk/asset/indexing run 会标记失败；local hash fallback 仍标记 skipped。
 - [x] 实现 BM25 检索。
 - [x] 实现 vector 检索。
 - [x] 实现 BM25/vector 混合排序。
@@ -132,23 +155,23 @@
 
 目标：补齐 Comet 级图片库、文档详情、asset 状态和可重试索引体验。
 
-- [ ] 新增 Image Library 路由。
-- [ ] 图片上传后进入 OCR 和 vision 描述管线。
-- [ ] 图片描述和 OCR 文本写入搜索投影。
-- [ ] 图片可搜索。
-- [ ] 图片可引用。
-- [ ] 图片可打标签。
-- [ ] 图片可收藏。
-- [ ] 扩展 Source Detail 页面。
-- [ ] 展示文件 asset 元数据。
-- [ ] 展示 parse 状态。
-- [ ] 展示 embedding 状态。
-- [ ] 展示 ES index 状态。
-- [ ] 展示图谱同步状态。
-- [ ] parse/index 失败可见。
-- [ ] parse/index 失败可重试。
-- [ ] 支持多知识库摄取。
-- [ ] 支持刷新网页资料和抓取任务。
+- [x] 新增 Image Library 路由。
+- [x] 图片上传后进入 OCR 和 vision 描述管线。
+- [x] 图片描述和 OCR 文本写入搜索投影。
+- [x] 图片可搜索。
+- [x] 图片可引用。
+- [x] 图片可打标签。
+- [x] 图片可收藏。
+- [x] 扩展 Source Detail 页面。
+- [x] 展示文件 asset 元数据。
+- [x] 展示 parse 状态。
+- [x] 展示 embedding 状态。
+- [x] 展示 ES index 状态。
+- [x] 展示图谱同步状态；当前为 Phase 3 状态面，真实 Neo4j 同步在 Phase 4 实现。
+- [x] parse/index 失败可见。
+- [x] parse/index 失败可重试。
+- [x] 支持多知识库摄取。
+- [x] 支持刷新网页资料和抓取任务。
 
 ## Phase 4：Neo4j 记忆图谱与结构化记忆
 
@@ -303,17 +326,18 @@
 
 ## 下一步建议
 
-下一步优先做 Phase 3：图片与文档知识对标。
+下一步优先完成 Phase 2 PR/merge 收尾；合并后做 Phase 3：图片与文档知识对标。
 
 原因：
 
-- Phase 2 已经给资料、chunk、检索、聊天和前端工作台建立 knowledge base scope。
+- Phase 2 已经给资料、chunk、检索、聊天和前端工作台建立 knowledge base scope，并已推送到远端 feature branch。
 - SourceChunk 和 IndexingRun 已经具备 Phase 3 所需的 embedding/index 状态基础。
 - 图片和文档知识 surfaces 是把当前 parser 能力产品化的下一步，也是补 SourceAsset、详情页和可重试索引体验的自然入口。
 - ES analyzer、自动 projection 写入和 rebuild/backfill CLI 可以作为 Phase 3 的横向收尾穿插完成。
 
-进入 Phase 3 前建议先完成两个短收尾：
+进入 Phase 3 前建议先完成三个短收尾：
 
+- 确认 Phase 2 PR 已创建并合并到 `main`，或在 GitHub UI 中确认当前分支仍可 clean merge。
 - 在 Docker daemon 可用环境中跑完整 compose smoke，包括登录、状态页、资料摄取、搜索和聊天引用。
 - 决定 refresh token/session 续期是否要在共享或生产环境前补齐；如果只面向本地单机开发，可以暂缓。
 

@@ -114,6 +114,7 @@ def test_indexed_source_chunks_include_scope_and_indexing_metadata(client):
 
 def test_index_source_uses_active_embedding_profile(client, monkeypatch):
     requests = []
+    projection_calls = []
 
     class FakeResponse:
         def raise_for_status(self):
@@ -122,11 +123,22 @@ def test_index_source_uses_active_embedding_profile(client, monkeypatch):
         def json(self):
             return {"data": [{"embedding": [1.0, 0.0, 0.0]} for _text in requests[-1]]}
 
+    class FakeProjection:
+        def __init__(self, embedding_dimensions=None, **_kwargs):
+            projection_calls.append(("init", embedding_dimensions))
+
+        def ensure_index(self):
+            projection_calls.append(("ensure",))
+
+        def index_chunk(self, document):
+            projection_calls.append(("index", document.source_title, document.text, document.embedding))
+
     def fake_post(url, headers, json, timeout):
         requests.append(json["input"])
         return FakeResponse()
 
     monkeypatch.setattr("service.core.embeddings.httpx.post", fake_post)
+    monkeypatch.setattr("service.core.knowledge.ElasticsearchProjection", FakeProjection)
     profile = client.post(
         "/api/settings/provider-profiles",
         json={
@@ -160,9 +172,15 @@ def test_index_source_uses_active_embedding_profile(client, monkeypatch):
     assert chunk.embedding_provider_profile_id == profile["id"]
     assert chunk.embedding_model == "text-embedding-test"
     assert chunk.embedding_dimensions == 3
-    assert chunk.index_status == "pending"
+    assert chunk.index_status == "indexed"
     assert run.embedding_provider_profile_id == profile["id"]
     assert run.embedding_model == "text-embedding-test"
+    assert run.chunks_indexed == 1
+    assert projection_calls == [
+        ("init", 3),
+        ("ensure",),
+        ("index", "Embedding source", "Active embedding profile content.", [1.0, 0.0, 0.0]),
+    ]
 
 
 def test_delete_source_removes_it_from_future_search(client):

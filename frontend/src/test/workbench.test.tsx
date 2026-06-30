@@ -189,31 +189,168 @@ describe('Lumen workbench', () => {
           return jsonResponse([
             {
               id: 7,
+              knowledge_base_id: 1,
+              knowledge_base_name: '默认知识库',
               title: '已有资料',
-              source_type: 'note',
+              source_type: 'link',
               status: 'indexed',
-              url: null,
+              url: 'https://example.com/page',
               filename: null,
               error_message: null,
               created_at: '2026-06-05T00:00:00',
             },
           ])
         }
+        if (url.includes('/api/sources/images') && method === 'GET') {
+          return jsonResponse([
+            {
+              id: 13,
+              knowledge_base_id: 1,
+              knowledge_base_name: '默认知识库',
+              title: 'diagram.png',
+              source_type: 'image',
+              status: 'pending',
+              url: null,
+              filename: '13/diagram.png',
+              error_message: null,
+              created_at: '2026-06-30T00:00:00',
+              asset: {
+                id: 130,
+                source_id: 13,
+                knowledge_base_id: 1,
+                asset_type: 'image',
+                filename: 'diagram.png',
+                mime_type: 'image/png',
+                byte_size: 136,
+                storage_path: '13/diagram.png',
+                parse_status: 'pending',
+                parse_error: null,
+                embedding_status: 'pending',
+                embedding_error: null,
+                index_status: 'pending',
+                index_error: null,
+                graph_status: 'pending',
+                graph_error: null,
+                created_at: '2026-06-30T00:00:00',
+                updated_at: '2026-06-30T00:00:00',
+              },
+              tags: [{ id: 31, name: 'Phase15', color: '#2563eb', created_at: '2026-06-05T00:00:00' }],
+              is_favorite: false,
+            },
+          ])
+        }
         if (url.endsWith('/api/sources/7') && method === 'GET') {
           return jsonResponse({
             id: 7,
+            knowledge_base_id: 1,
+            knowledge_base_name: '默认知识库',
             title: '已有资料',
-            source_type: 'note',
+            source_type: 'link',
             status: 'indexed',
-            url: null,
+            url: 'https://example.com/page',
             filename: null,
             error_message: null,
             created_at: '2026-06-05T00:00:00',
             chunk_count: 2,
+            assets: [],
+            embedding_status: 'skipped',
+            index_status: 'skipped',
+            graph_status: 'pending',
+            indexing_runs: [],
+            tags: [],
+            is_favorite: false,
+            can_retry: false,
+          })
+        }
+        if (url.endsWith('/api/sources/13') && method === 'GET') {
+          return jsonResponse({
+            id: 13,
+            knowledge_base_id: 1,
+            knowledge_base_name: '默认知识库',
+            title: 'diagram.png',
+            source_type: 'image',
+            status: 'pending',
+            url: null,
+            filename: '13/diagram.png',
+            error_message: null,
+            created_at: '2026-06-30T00:00:00',
+            chunk_count: 0,
+            assets: [
+              {
+                id: 130,
+                source_id: 13,
+                knowledge_base_id: 1,
+                asset_type: 'image',
+                filename: 'diagram.png',
+                mime_type: 'image/png',
+                byte_size: 136,
+                storage_path: '13/diagram.png',
+                parse_status: 'pending',
+                parse_error: null,
+                embedding_status: 'pending',
+                embedding_error: null,
+                index_status: 'pending',
+                index_error: null,
+                graph_status: 'pending',
+                graph_error: null,
+                created_at: '2026-06-30T00:00:00',
+                updated_at: '2026-06-30T00:00:00',
+              },
+            ],
+            embedding_status: 'pending',
+            index_status: 'pending',
+            graph_status: 'pending',
+            indexing_runs: [],
+            tags: [{ id: 31, name: 'Phase15', color: '#2563eb', created_at: '2026-06-05T00:00:00' }],
+            is_favorite: false,
+            can_retry: false,
           })
         }
         if (url.endsWith('/api/sources/7') && method === 'DELETE') {
           return noContentResponse()
+        }
+        if (url.endsWith('/api/ingestion-jobs/sources/7/refresh') && method === 'POST') {
+          return jsonResponse({
+            batch_id: 'batch-refresh-web',
+            total: 1,
+            queued: 1,
+            running: 0,
+            succeeded: 0,
+            failed: 0,
+            canceled: 0,
+            jobs: [
+              {
+                id: 103,
+                batch_id: 'batch-refresh-web',
+                source_id: 7,
+                source_title: '已有资料',
+                job_type: 'retry',
+                status: 'queued',
+                progress_current: 0,
+                progress_total: 3,
+                message: '已加入刷新队列',
+                error_message: null,
+                created_at: '2026-06-30T00:00:00',
+                updated_at: '2026-06-30T00:00:00',
+                started_at: null,
+                finished_at: null,
+              },
+            ],
+            sources: [
+              {
+                id: 7,
+                knowledge_base_id: 1,
+                knowledge_base_name: '默认知识库',
+                title: '已有资料',
+                source_type: 'link',
+                status: 'indexed',
+                url: 'https://example.com/page',
+                filename: null,
+                error_message: null,
+                created_at: '2026-06-05T00:00:00',
+              },
+            ],
+          })
         }
         if (url.includes('/api/ingestion-jobs') && method === 'GET') {
           return jsonResponse([
@@ -1864,6 +2001,51 @@ describe('Lumen workbench', () => {
     await user.type(screen.getByLabelText('询问 Lumen'), 'Lumen 应该引用什么？')
     await user.click(screen.getByRole('button', { name: '询问 Lumen' }))
     expect(await screen.findByRole('button', { name: '收藏回答' })).toBeInTheDocument()
+  })
+
+  it('shows the Phase 3 image library and source asset detail status', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(screen.getByRole('button', { name: '图片库' }))
+
+    expect(await screen.findByRole('heading', { name: '图片库' })).toBeInTheDocument()
+    expect(await screen.findByText('diagram.png')).toBeInTheDocument()
+    expect(screen.getByText('image/png · 136 bytes')).toBeInTheDocument()
+    expect(screen.getByText('OCR / Vision：待解析')).toBeInTheDocument()
+    expect(screen.getByText('Embedding：待处理')).toBeInTheDocument()
+    expect(screen.getByText('ES 索引：待处理')).toBeInTheDocument()
+    expect(fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:8000/api/sources/images?knowledge_base_id=1',
+      expect.objectContaining({ method: 'GET' }),
+    )
+
+    await user.click(screen.getByRole('button', { name: '查看图片详情' }))
+
+    expect(await screen.findByText('图片详情')).toBeInTheDocument()
+    expect(screen.getByText('文件 asset：diagram.png')).toBeInTheDocument()
+    expect(screen.getByText('Parse：待解析')).toBeInTheDocument()
+    expect(screen.getAllByText('Graph：待同步').length).toBeGreaterThan(0)
+    expect(fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:8000/api/sources/13',
+      expect.objectContaining({ method: 'GET' }),
+    )
+  })
+
+  it('queues a refresh job from web source details', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(screen.getByRole('button', { name: '资料库' }))
+    await user.click(screen.getByRole('button', { name: '查看详情' }))
+
+    expect(await screen.findByText('原始位置：https://example.com/page')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '刷新网页资料' }))
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://127.0.0.1:8000/api/ingestion-jobs/sources/7/refresh',
+      expect.objectContaining({ method: 'POST' }),
+    )
   })
 
   it('shows status view and retries failed sources', async () => {

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from functools import lru_cache
+import mimetypes
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +13,7 @@ from service.core.storage import move_to_final, resolve_file_path, save_temp_upl
 from service.models import Source
 from service.repositories.chunks import ChunkRepository
 from service.repositories.indexing_runs import IndexingRunRepository
+from service.repositories.source_assets import SourceAssetRepository, asset_type_for_source_type
 from service.repositories.sources import SourceRepository
 from service.schemas import SourceCreate, WebCrawlRequest
 
@@ -47,7 +48,6 @@ def decode_text_upload(file_data: bytes) -> str:
     return file_data.decode("utf-8", errors="replace").strip()
 
 
-@lru_cache
 def build_vision_client() -> HttpxChatCompletionClient | None:
     settings = get_settings()
     if settings.llm_api_key and settings.llm_model:
@@ -84,13 +84,25 @@ class IngestionService:
         sources: SourceRepository,
         chunks: ChunkRepository,
         indexing_runs: IndexingRunRepository | None = None,
+        source_assets: SourceAssetRepository | None = None,
         embeddings=None,
     ):
         self.sources = sources
         self.chunks = chunks
-        self.knowledge = KnowledgeService(sources, chunks, indexing_runs=indexing_runs, embeddings=embeddings)
+        self.source_assets = source_assets or SourceAssetRepository(
+            chunks.db,
+            user_id=chunks.user_id,
+            knowledge_base_id=chunks.knowledge_base_id,
+        )
+        self.knowledge = KnowledgeService(
+            sources,
+            chunks,
+            indexing_runs=indexing_runs,
+            source_assets=self.source_assets,
+            embeddings=embeddings,
+        )
 
-    async def create_and_index_upload(self, filename: str, file_data: bytes) -> Source:
+    async def create_and_index_upload(self, filename: str, file_data: bytes, mime_type: str | None = None) -> Source:
         source_type = source_type_for_filename(filename)
         if source_type is None:
             source = self.sources.create(SourceCreate(title=filename, source_type="text", filename=filename))
@@ -102,6 +114,7 @@ class IngestionService:
             source = self.sources.create(
                 SourceCreate(title=filename, source_type=source_type, filename=filename, content=content)
             )
+            self._create_upload_asset(source, filename, file_data, mime_type, storage_path=None)
             await self.parse_existing_source(source.id)
             return self.index_existing_source(source.id)
 
@@ -114,6 +127,8 @@ class IngestionService:
             final_relative = move_to_final(temp_relative, source.id, filename)
             temp_relative = None
             self.sources.update_filename(source.id, final_relative)
+            source = self._source(source.id)
+            self._create_upload_asset(source, filename, file_data, mime_type, storage_path=final_relative)
             await self.parse_existing_source(source.id)
             return self.index_existing_source(source.id)
         except Exception:
@@ -126,8 +141,15 @@ class IngestionService:
     async def parse_existing_source(self, source_id: int) -> Source:
         source = self._source(source_id)
         parser = get_parser(source.source_type)
-        result = await parser.parse(source, **parser_kwargs_for_source(source.source_type))
-        return self._store_parse_result(source.id, result.text, result.title)
+        try:
+            self.source_assets.mark_parse_running(source.id)
+            result = await parser.parse(source, **parser_kwargs_for_source(source.source_type))
+            parsed = self._store_parse_result(source.id, result.text, result.title)
+            self.source_assets.mark_parse_succeeded(source.id)
+            return parsed
+        except Exception as exc:
+            self.source_assets.mark_parse_failed(source.id, str(exc))
+            raise
 
     async def parse_link_source(self, source_id: int) -> Source:
         source = self._source(source_id)
@@ -187,3 +209,22 @@ class IngestionService:
         if source is None:
             raise ValueError(f"source {source_id} not found")
         return source
+
+    def _create_upload_asset(
+        self,
+        source: Source,
+        filename: str,
+        file_data: bytes,
+        mime_type: str | None,
+        *,
+        storage_path: str | None,
+    ) -> None:
+        resolved_mime_type = mime_type or mimetypes.guess_type(filename)[0]
+        self.source_assets.create_for_source(
+            source.id,
+            filename=filename,
+            asset_type=asset_type_for_source_type(source.source_type),
+            mime_type=resolved_mime_type,
+            byte_size=len(file_data),
+            storage_path=storage_path,
+        )

@@ -2,10 +2,12 @@ from dataclasses import dataclass
 import re
 
 from service.core.chunking import chunk_text
+from service.core.elasticsearch_projection import ElasticsearchProjection, SourceChunkDocument
 from service.core.embeddings import HashEmbeddingProvider, cosine, dumps_embedding, loads_embedding
 from service.models import SourceChunk
 from service.repositories.chunks import ChunkRepository
 from service.repositories.indexing_runs import IndexingRunRepository
+from service.repositories.source_assets import SourceAssetRepository
 from service.repositories.sources import SourceRepository
 from service.schemas import ChunkRead
 
@@ -33,7 +35,9 @@ class KnowledgeService:
         sources: SourceRepository,
         chunks: ChunkRepository,
         indexing_runs: IndexingRunRepository | None = None,
+        source_assets: SourceAssetRepository | None = None,
         embeddings: HashEmbeddingProvider | None = None,
+        projection: ElasticsearchProjection | None = None,
     ):
         self.sources = sources
         self.chunks = chunks
@@ -42,7 +46,13 @@ class KnowledgeService:
             user_id=chunks.user_id,
             knowledge_base_id=chunks.knowledge_base_id,
         )
+        self.source_assets = source_assets or SourceAssetRepository(
+            chunks.db,
+            user_id=chunks.user_id,
+            knowledge_base_id=chunks.knowledge_base_id,
+        )
         self.embeddings = embeddings or HashEmbeddingProvider()
+        self.projection = projection
 
     def index_source(self, source_id: int, job_id: int | None = None) -> None:
         source = self.sources.get(source_id)
@@ -64,18 +74,22 @@ class KnowledgeService:
         )
         try:
             self.indexing_runs.mark_running(run.id)
+            self.source_assets.mark_embedding_status(source_id, "pending")
+            self.source_assets.mark_index_status(source_id, "pending")
             self.sources.mark_parsing(source_id)
             text = (source.content or "").strip()
             chunks = chunk_text(text)
             if not chunks:
                 message = "No text content found"
                 self.sources.mark_failed(source_id, message)
+                self.source_assets.mark_embedding_status(source_id, "failed", message)
+                self.source_assets.mark_index_status(source_id, "failed", message)
                 self.indexing_runs.mark_failed(run.id, message)
                 return
             embeddings = self._embed_chunks(chunks)
             indexed = [(chunk, dumps_embedding(vector)) for chunk, vector in zip(chunks, embeddings, strict=True)]
             self.indexing_runs.update_progress(run.id, chunks_total=len(indexed), chunks_embedded=len(indexed))
-            self.chunks.replace_for_source(
+            chunk_rows = self.chunks.replace_for_source(
                 source_id,
                 indexed,
                 embedding_status=embedding_status,
@@ -84,18 +98,61 @@ class KnowledgeService:
                 embedding_dimensions=embedding_dimensions,
                 index_status=index_status,
             )
+            self.source_assets.mark_embedding_status(source_id, embedding_status)
+        except Exception as exc:
+            message = str(exc)
+            self.sources.mark_failed(source_id, message)
+            self.source_assets.mark_embedding_status(source_id, "failed", message)
+            self.source_assets.mark_index_status(source_id, "failed", message)
+            self.indexing_runs.mark_failed(run.id, message)
+            raise
+
+        if embedding_status == "embedded":
+            indexed_count = 0
+            try:
+                projection = self._projection(embedding_dimensions)
+                projection.ensure_index()
+                for chunk_row in chunk_rows:
+                    projection.index_chunk(SourceChunkDocument.from_chunk(chunk_row))
+                    indexed_count += 1
+            except Exception as exc:
+                message = str(exc)
+                self.chunks.mark_index_status_for_source(source_id, "failed", message)
+                self.source_assets.mark_index_status(source_id, "failed", message)
+                self.sources.mark_failed(source_id, message)
+                self.indexing_runs.update_progress(
+                    run.id,
+                    chunks_total=len(indexed),
+                    chunks_embedded=len(indexed),
+                    chunks_indexed=indexed_count,
+                )
+                self.indexing_runs.mark_failed(run.id, message)
+                raise
+
+            self.chunks.mark_index_status_for_source(source_id, "indexed")
+            self.source_assets.mark_index_status(source_id, "indexed")
             self.indexing_runs.mark_succeeded(
                 run.id,
                 chunks_total=len(indexed),
                 chunks_embedded=len(indexed),
-                chunks_indexed=0,
+                chunks_indexed=indexed_count,
             )
             self.sources.mark_indexed(source_id)
-        except Exception as exc:
-            message = str(exc)
-            self.sources.mark_failed(source_id, message)
-            self.indexing_runs.mark_failed(run.id, message)
-            raise
+            return
+
+        self.source_assets.mark_index_status(source_id, index_status)
+        self.indexing_runs.mark_succeeded(
+            run.id,
+            chunks_total=len(indexed),
+            chunks_embedded=len(indexed),
+            chunks_indexed=0,
+        )
+        self.sources.mark_indexed(source_id)
+
+    def _projection(self, embedding_dimensions: int | None) -> ElasticsearchProjection:
+        if self.projection is not None:
+            return self.projection
+        return ElasticsearchProjection(embedding_dimensions=embedding_dimensions)
 
     def _embed_chunks(self, chunks: list[str]) -> list[list[float]]:
         embed_many = getattr(self.embeddings, "embed_many", None)

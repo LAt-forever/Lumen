@@ -1,6 +1,6 @@
 # Comet 对标矩阵
 
-日期：2026-06-29
+日期：2026-06-30
 
 本文档跟踪 Lumen 全面对标 Comet 的模块级进度。状态含义：
 
@@ -15,11 +15,11 @@
 | 运行健康状态 | 模型、资料、任务摘要 | PostgreSQL、Redis、Elasticsearch、Neo4j、worker、beat 全部可见 | Phase 0 |
 | 多用户认证 | 已具备邮箱密码、JWT access token、bootstrap 用户、登录页和受保护路由 | Refresh/session 续期可作为后续增强 | 已具备 |
 | 用户级数据隔离 | PostgreSQL 核心业务表、配置、Agent profile、worker job 和 ES source chunk projection 已按 user scope 隔离 | Neo4j 投影在 Phase 4 接入时继续继承 user scope | Phase 1 |
-| 多知识库 | KnowledgeBase 模型、API、选择器、管理页和资料归属已完成 | Phase 3 起扩展到图片、文档 asset 和详情页 | Phase 2 完成 |
-| ES 混合检索 | Elasticsearch source chunk projection、BM25/vector、RRF 混合排序、reranker hook 和本地 fallback 已完成 | 后续补充 analyzer 调优和可视化 rebuild 操作 | Phase 2 完成 |
+| 多知识库 | KnowledgeBase 模型、API、选择器、管理页、资料归属、图片库和摄取队列 scope 已完成 | 后续扩展到 Neo4j projection 和 Agent/Research 工作流 | Phase 3 完成 |
+| ES 混合检索 | Elasticsearch source chunk projection、BM25/vector、RRF 混合排序、reranker hook、本地 fallback 和 remote embedding 后自动 projection 已完成 | 后续补充 analyzer 调优和可视化 rebuild 操作 | Phase 3 完成 |
 | 真实 embedding | OpenAI-compatible embedding provider、profile 设置、测试接口和索引接线已完成；无配置时保留 hash fallback | 生产环境配置真实 provider/key 后启用 | Phase 2 完成 |
-| 图片知识库 | parser 已支持图片 OCR/vision 路径 | 图片库、搜索、引用、标签、收藏 | Phase 3 |
-| 文档知识库 | 支持多文件 parser | 知识详情、asset 状态、可重试索引状态 | Phase 3 |
+| 图片知识库 | 图片 OCR/vision parse、Image Library、asset 状态、搜索、聊天引用、标签和收藏已完成 | 后续可增强图片预览式引用卡和更强 vision provider 配置 | Phase 3 完成 |
+| 文档知识库 | 多文件 parser、SourceAsset 元数据、详情页 parse/embedding/ES/graph 状态和可重试索引状态已完成 | 真实图谱同步进入 Phase 4 | Phase 3 完成 |
 | Neo4j 记忆图谱 | 关系库存储和 React Flow 展示 | Neo4j 实体/关系/事件/provenance/time-line | Phase 4 |
 | LLM 结构化记忆抽取 | 规则式候选抽取 | LLM 结构化抽取 + 用户确认 | Phase 4 |
 | Agent 工具调用 | 受控只读工具 | ReAct/function-calling、工具注册、审批、日志 | Phase 5 |
@@ -54,6 +54,16 @@
 - KnowledgeBase 支持创建、重命名、归档、恢复、删除空知识库，资料、摄取队列、搜索和聊天继承当前知识库范围。
 - SourceChunk 和 IndexingRun 记录 user scope、knowledge base scope、embedding 状态和 index 状态。
 - Provider profile 支持 embedding 能力字段和测试接口；active embedding profile 会用于新资料索引和 ES query embedding。
-- Elasticsearch source chunk projection 支持 scoped BM25、vector kNN、RRF 混合排序和从 PostgreSQL scoped reload。
+- Elasticsearch source chunk projection 支持 scoped BM25、vector kNN、RRF 混合排序、remote embedding 后自动写入和从 PostgreSQL scoped reload。
 - `/api/search`、`/api/global-search` 和聊天引用路径已切到 RetrievalService，`auto` 模式在 ES 或 query embedding 失败时回退本地检索。
 - 检索评测覆盖默认知识库隔离、ES BM25 精确关键词、vector 语义文本和弱证据 fallback。
+
+## Phase 3 验收
+
+- 上传图片会创建 SourceAsset，并展示文件名、MIME、大小、parse、embedding、ES index 和 graph 状态。
+- 图片 parser 输出的 OCR/vision 文本会进入 source chunks；图片可通过搜索命中，也可在聊天回答中作为 citation 引用。
+- remote embedding 成功后自动写入 Elasticsearch source chunk projection；ES 写入失败时 source/chunk/asset/indexing run 标记失败，local hash fallback 标记 skipped。
+- Image Library 按当前用户和知识库 scope 只列出图片，并保留标签与收藏状态。
+- Source Detail 展示 asset 元数据、索引运行、标签、收藏、失败可重试和网页资料刷新入口。
+- 网页 link/bookmark/crawl source 可创建 refresh ingestion job，由 worker 重抓并重建索引。
+- Graph 状态已在详情中展示为 Phase 3 状态面；真实 Neo4j projection 在 Phase 4 实现。

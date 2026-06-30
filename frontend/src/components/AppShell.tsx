@@ -10,6 +10,7 @@ import { CapturePanel } from './CapturePanel'
 import { ChatPanel } from './ChatPanel'
 import { ContextPanel } from './ContextPanel'
 import { IngestionProgressPanel } from './IngestionProgressPanel'
+import { ImageLibraryPanel } from './ImageLibraryPanel'
 import { KnowledgeBasePanel } from './KnowledgeBasePanel'
 import { KnowledgeBaseSelector } from './KnowledgeBaseSelector'
 import { MemoryGraphPanel } from './MemoryGraphPanel'
@@ -25,6 +26,7 @@ export type ViewKey =
   | 'today'
   | 'ask'
   | 'library'
+  | 'images'
   | 'knowledge-base'
   | 'memory'
   | 'graph'
@@ -127,6 +129,9 @@ export function AppShell({ accountLabel, navItems, onLogout }: AppShellProps) {
           <SourceList />
         </>
       )
+    }
+    if (activeView === 'images') {
+      return <ImageLibraryPanel />
     }
     if (activeView === 'knowledge-base') {
       return <KnowledgeBasePanel />

@@ -124,6 +124,47 @@ def test_worker_failure_marks_existing_indexing_run_failed(tmp_path, monkeypatch
         assert "chunk write failed" in run.error_message
 
 
+def test_worker_retry_job_does_not_index_twice(tmp_path, monkeypatch):
+    setup_database(tmp_path, monkeypatch)
+    with dbmod.SessionLocal() as db:
+        sources = SourceRepository(db)
+        jobs = IngestionJobRepository(db)
+        source = sources.create(SourceCreate(title="Retry once", source_type="note", content="Retry once content."))
+        job = jobs.create(
+            job_type="retry",
+            batch_id="batch-worker-retry-once",
+            source_id=source.id,
+            payload_json=f'{{"source_id": {source.id}}}',
+            progress_total=3,
+        )
+        source_id = source.id
+        job_id = job.id
+
+    calls = []
+
+    async def fake_retry_source(self, source_id):
+        calls.append(("retry", source_id))
+        return self._source(source_id)
+
+    def fake_index_existing_source(self, source_id, job_id=None):
+        calls.append(("index", source_id, job_id))
+        return self._source(source_id)
+
+    from service.core.ingestion import IngestionService
+    from service.worker import run_ingestion_job
+
+    monkeypatch.setattr(IngestionService, "retry_source", fake_retry_source)
+    monkeypatch.setattr(IngestionService, "index_existing_source", fake_index_existing_source)
+
+    run_ingestion_job(job_id)
+
+    with dbmod.SessionLocal() as db:
+        job_after = IngestionJobRepository(db).get(job_id)
+
+    assert calls == [("retry", source_id)]
+    assert job_after.status == "succeeded"
+
+
 def test_worker_uses_job_knowledge_base_scope(tmp_path, monkeypatch):
     setup_database(tmp_path, monkeypatch)
     with dbmod.SessionLocal() as db:

@@ -30,6 +30,7 @@ import type {
   RerankerProfileRead,
   RerankerProfileUpdate,
   SourceDetailRead,
+  SourceImageRead,
   BulkUploadResult,
   SourceRead,
   StatusSummaryRead,
@@ -195,6 +196,12 @@ export const api = {
     const suffix = search.toString() ? `?${search.toString()}` : ''
     return request<SourceRead[]>(`/api/sources${suffix}`)
   },
+  listImages: (knowledgeBaseId?: number | null) => {
+    const search = new URLSearchParams()
+    if (knowledgeBaseId) search.set('knowledge_base_id', String(knowledgeBaseId))
+    const suffix = search.toString() ? `?${search.toString()}` : ''
+    return request<SourceImageRead[]>(`/api/sources/images${suffix}`)
+  },
   login: (payload: { email: string; password: string }) =>
     request<AuthTokenRead>('/api/auth/login', { method: 'POST', body: JSON.stringify(payload) }),
   me: () => request<UserRead>('/api/auth/me'),
@@ -234,6 +241,8 @@ export const api = {
     request<IngestionJobRead>(`/api/ingestion-jobs/${jobId}/cancel`, { method: 'POST' }),
   retryIngestionJob: (jobId: number) =>
     request<IngestionBatchRead>(`/api/ingestion-jobs/${jobId}/retry`, { method: 'POST' }),
+  refreshSource: (sourceId: number) =>
+    request<IngestionBatchRead>(`/api/ingestion-jobs/sources/${sourceId}/refresh`, { method: 'POST' }),
   uploadSources: (files: File[]) => {
     const body = new FormData()
     files.forEach((f) => body.append('files', f))

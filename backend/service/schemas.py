@@ -103,8 +103,69 @@ class SourceRead(BaseModel):
     created_at: datetime
 
 
+class TagRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    color: str | None
+    created_at: datetime
+
+
+class SourceAssetRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    source_id: int
+    knowledge_base_id: int | None
+    asset_type: str
+    filename: str
+    mime_type: str | None
+    byte_size: int
+    storage_path: str | None
+    parse_status: str
+    parse_error: str | None
+    embedding_status: str
+    embedding_error: str | None
+    index_status: str
+    index_error: str | None
+    graph_status: str
+    graph_error: str | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class SourceIndexingRunRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    run_type: str
+    status: str
+    chunks_total: int
+    chunks_embedded: int
+    chunks_indexed: int
+    error_message: str | None
+    started_at: datetime | None
+    finished_at: datetime | None
+    created_at: datetime
+
+
 class SourceDetailRead(SourceRead):
     chunk_count: int
+    assets: list[SourceAssetRead] = Field(default_factory=list)
+    embedding_status: str = "pending"
+    index_status: str = "pending"
+    graph_status: str = "pending"
+    indexing_runs: list[SourceIndexingRunRead] = Field(default_factory=list)
+    tags: list[TagRead] = Field(default_factory=list)
+    is_favorite: bool = False
+    can_retry: bool = False
+
+
+class SourceImageRead(SourceRead):
+    asset: SourceAssetRead
+    tags: list[TagRead] = Field(default_factory=list)
+    is_favorite: bool = False
 
 
 class ChunkRead(BaseModel):
@@ -229,15 +290,6 @@ class MemoryGraphRead(BaseModel):
     center_memory_id: int
     nodes: list[MemoryGraphNode]
     edges: list[MemoryGraphEdge]
-
-
-class TagRead(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: int
-    name: str
-    color: str | None
-    created_at: datetime
 
 
 class TagCreate(BaseModel):

@@ -14,6 +14,7 @@ from service.db import get_db
 from service.models import User
 from service.repositories.knowledge_bases import KnowledgeBaseRepository
 from service.repositories.ingestion_jobs import IngestionJobRepository
+from service.repositories.source_assets import SourceAssetRepository, asset_type_for_source_type
 from service.repositories.sources import SourceRepository
 from service.schemas import (
     BookmarkImportRequest,
@@ -27,6 +28,7 @@ from service.schemas import (
 from service.worker import process_ingestion_job
 
 router = APIRouter(prefix="/api/ingestion-jobs", tags=["ingestion-jobs"])
+WEB_REFRESH_SOURCE_TYPES = {"link", "bookmark", "web_crawl"}
 
 
 def _job_read(job) -> IngestionJobRead:
@@ -68,6 +70,10 @@ def _source_repo(db: Session, user_id: int | None, knowledge_base_id: int | None
 
 def _job_repo(db: Session, user_id: int | None, knowledge_base_id: int | None) -> IngestionJobRepository:
     return IngestionJobRepository(db, user_id=user_id, knowledge_base_id=knowledge_base_id)
+
+
+def _asset_repo(db: Session, user_id: int | None, knowledge_base_id: int | None) -> SourceAssetRepository:
+    return SourceAssetRepository(db, user_id=user_id, knowledge_base_id=knowledge_base_id)
 
 
 def _payload(**values) -> str:
@@ -143,12 +149,14 @@ async def enqueue_uploads(
     batch_id = str(uuid4())
     sources = _source_repo(db, current_user.id, knowledge_base.id)
     jobs = _job_repo(db, current_user.id, knowledge_base.id)
+    assets = _asset_repo(db, current_user.id, knowledge_base.id)
     created_jobs = []
     created_sources = []
 
     for file in files:
         filename = file.filename or "Untitled file"
         source_type = source_type_for_filename(filename)
+        file_data = await file.read()
         if source_type is None:
             source = sources.create(
                 SourceCreate(title=filename, source_type="text", filename=filename, knowledge_base_id=knowledge_base.id)
@@ -164,7 +172,6 @@ async def enqueue_uploads(
             )
             job = jobs.mark_failed(job.id, "Unsupported file type")
         else:
-            file_data = await file.read()
             if source_type in ("text", "markdown"):
                 content = decode_text_upload(file_data)
                 source = sources.create(
@@ -175,6 +182,14 @@ async def enqueue_uploads(
                         content=content,
                         knowledge_base_id=knowledge_base.id,
                     )
+                )
+                assets.create_for_source(
+                    source.id,
+                    filename=filename,
+                    asset_type=asset_type_for_source_type(source_type),
+                    mime_type=file.content_type,
+                    byte_size=len(file_data),
+                    storage_path=None,
                 )
             else:
                 temp_relative = save_temp_upload(file_data, filename)
@@ -191,6 +206,14 @@ async def enqueue_uploads(
                     temp_relative = ""
                     sources.update_filename(source.id, final_relative)
                     source = sources.get(source.id) or source
+                    assets.create_for_source(
+                        source.id,
+                        filename=filename,
+                        asset_type=asset_type_for_source_type(source_type),
+                        mime_type=file.content_type,
+                        byte_size=len(file_data),
+                        storage_path=final_relative,
+                    )
                 finally:
                     if temp_relative:
                         resolve_file_path(temp_relative).unlink(missing_ok=True)
@@ -315,6 +338,33 @@ def enqueue_source_index(source_id: int, db: Session = Depends(get_db), current_
         payload_json=_payload(source_id=source.id, knowledge_base_id=knowledge_base.id),
         progress_total=3,
         message="已加入队列",
+    )
+    job = _enqueue_or_503(db, job, source.id, current_user.id, knowledge_base.id)
+    return _batch_response(batch_id, [job], [source])
+
+
+@router.post("/sources/{source_id}/refresh", response_model=IngestionBatchRead)
+def enqueue_source_refresh(source_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    sources = SourceRepository(db, user_id=current_user.id)
+    source = sources.get(source_id)
+    if source is None:
+        raise HTTPException(status_code=404, detail="Source not found")
+    if source.source_type not in WEB_REFRESH_SOURCE_TYPES:
+        raise HTTPException(status_code=409, detail="Only web sources can be refreshed")
+    knowledge_base = _active_knowledge_base(db, current_user, source.knowledge_base_id)
+    scoped_sources = _source_repo(db, current_user.id, knowledge_base.id)
+    source = scoped_sources.get(source_id)
+    if source is None:
+        raise HTTPException(status_code=404, detail="Source not found")
+    batch_id = str(uuid4())
+    jobs = _job_repo(db, current_user.id, knowledge_base.id)
+    job = jobs.create(
+        job_type="retry",
+        batch_id=batch_id,
+        source_id=source.id,
+        payload_json=_payload(source_id=source.id, url=source.url, knowledge_base_id=knowledge_base.id),
+        progress_total=3,
+        message="已加入刷新队列",
     )
     job = _enqueue_or_503(db, job, source.id, current_user.id, knowledge_base.id)
     return _batch_response(batch_id, [job], [source])
